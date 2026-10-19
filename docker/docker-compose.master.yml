@@ -1,0 +1,32 @@
+# Compose cho máy Nghĩa (nghia-master) khi chạy liên máy qua mạng LAN/Tailscale
+services:
+  master:
+    image: bigdata-cluster:1.0
+    container_name: nghia-master
+    hostname: nghia-master
+    network_mode: host
+    environment:
+      - NODE_ROLE=master
+      - NODE_HOSTNAME=nghia-master
+      - CLUSTER_SIZE=4
+      - MASTER_HOSTNAME=${MASTER_HOSTNAME:-nghia-master}
+      - MASTER_IP=${MASTER_IP}
+      - WORKER1_IP=${WORKER1_IP}
+      - WORKER2_IP=${WORKER2_IP}
+      - WORKER3_IP=${WORKER3_IP}
+      - WORKER4_IP=${WORKER4_IP}
+      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME}
+      - WORKER2_HOSTNAME=${WORKER2_HOSTNAME}
+      - WORKER3_HOSTNAME=${WORKER3_HOSTNAME}
+      - WORKER4_HOSTNAME=${WORKER4_HOSTNAME}
+    volumes:
+      - ../data:/opt/data
+      - ../pyspark:/opt/pyspark
+      - ../hive:/opt/hive-scripts
+      - master_namenode:/opt/hadoop/hdfs/namenode
+      - master_hive_metastore:/opt/hive/metastore_db
+    restart: unless-stopped
+
+volumes:
+  master_namenode:
+  master_hive_metastore:

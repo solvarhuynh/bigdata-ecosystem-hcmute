@@ -1,0 +1,33 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build artifacts, exported images and local archives
+*.tar
+*.tar.gz
+*.zip
+
+# Runtime data, logs and local diagnostics
+*.log
+*.debug.log
+logs/
+debug-logs/
+metastore_db/
+derby.log
+tmp/
+
+# Local backups and generated metadata
+backups/
+.cache/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# SSH credentials and certificates
+.ssh/
+id_rsa*
+*.pem
+*.key

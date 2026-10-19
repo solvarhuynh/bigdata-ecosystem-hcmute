@@ -1,0 +1,31 @@
+# Compose mẫu dùng trên từng máy Worker chạy liên máy qua mạng LAN/Tailscale.
+# Mỗi máy đặt NODE_HOSTNAME, WORKER_LOGICAL_NAME và WORKER_IP riêng.
+services:
+  worker:
+    image: bigdata-cluster:1.0
+    container_name: ${NODE_HOSTNAME:-worker-container}
+    hostname: ${NODE_HOSTNAME:-worker-container}
+    network_mode: host
+    environment:
+      - NODE_ROLE=worker
+      - CLUSTER_SIZE=4
+      - NODE_HOSTNAME=${NODE_HOSTNAME}
+      - WORKER_LOGICAL_NAME=${WORKER_LOGICAL_NAME}
+      - WORKER_IP=${WORKER_IP}
+      - MASTER_IP=${MASTER_IP}
+      - WORKER1_IP=${WORKER1_IP}
+      - WORKER2_IP=${WORKER2_IP}
+      - WORKER3_IP=${WORKER3_IP}
+      - WORKER4_IP=${WORKER4_IP}
+      - MASTER_HOSTNAME=${MASTER_HOSTNAME:-nghia-master}
+      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME}
+      - WORKER2_HOSTNAME=${WORKER2_HOSTNAME}
+      - WORKER3_HOSTNAME=${WORKER3_HOSTNAME}
+      - WORKER4_HOSTNAME=${WORKER4_HOSTNAME}
+    volumes:
+      - ../data:/opt/data
+      - worker_datanode:/opt/hadoop/hdfs/datanode
+    restart: unless-stopped
+
+volumes:
+  worker_datanode:

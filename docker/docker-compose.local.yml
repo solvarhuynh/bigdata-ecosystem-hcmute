@@ -1,0 +1,62 @@
+# File compose test nội bộ trên 1 máy của Master (nghia-master + 1 worker).
+# WORKER1_HOSTNAME có thể đổi thành bất kỳ tên thực tế nào.
+services:
+  nghia-master:
+    image: bigdata-cluster:1.0
+    container_name: nghia-master
+    hostname: nghia-master
+    environment:
+      - NODE_ROLE=master
+      - NODE_HOSTNAME=nghia-master
+      - CLUSTER_SIZE=1
+      - MASTER_HOSTNAME=nghia-master
+      - MASTER_IP=172.20.0.2
+      - WORKER1_IP=172.20.0.3
+      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME:-local-worker1}
+    ports:
+      - "9870:9870"   # HDFS NameNode Web UI
+      - "9000:9000"   # HDFS RPC
+      - "8088:8088"   # YARN ResourceManager Web UI
+      - "9083:9083"   # Hive Metastore Thrift
+      - "10000:10000" # HiveServer2 JDBC
+      - "10002:10002" # Hive Web UI
+    networks:
+      bigdata_lan:
+        ipv4_address: 172.20.0.2
+    volumes:
+      - ../data:/opt/data
+      - local_namenode:/opt/hadoop/hdfs/namenode
+      - local_hive_metastore:/opt/hive/metastore_db
+
+  worker1:
+    image: bigdata-cluster:1.0
+    container_name: ${WORKER1_HOSTNAME:-local-worker1}
+    hostname: ${WORKER1_HOSTNAME:-local-worker1}
+    environment:
+      - NODE_ROLE=worker
+      - CLUSTER_SIZE=1
+      - NODE_HOSTNAME=${WORKER1_HOSTNAME:-local-worker1}
+      - WORKER_LOGICAL_NAME=worker1
+      - WORKER_IP=172.20.0.3
+      - MASTER_IP=172.20.0.2
+      - MASTER_HOSTNAME=nghia-master
+      - WORKER1_IP=172.20.0.3
+      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME:-local-worker1}
+    networks:
+      bigdata_lan:
+        ipv4_address: 172.20.0.3
+    volumes:
+      - ../data:/opt/data
+      - local_worker1_datanode:/opt/hadoop/hdfs/datanode
+
+networks:
+  bigdata_lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  local_namenode:
+  local_hive_metastore:
+  local_worker1_datanode:
