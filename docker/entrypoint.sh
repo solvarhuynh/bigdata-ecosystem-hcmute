@@ -167,6 +167,7 @@ if [ "${VALIDATE_ONLY:-false}" = "true" ]; then
     exit 0
 fi
 
+ssh-keygen -A
 service ssh start
 if ! pgrep -x sshd >/dev/null; then
     fail "sshd không khởi động thành công."

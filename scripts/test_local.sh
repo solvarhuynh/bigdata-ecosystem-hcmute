@@ -31,6 +31,7 @@ master_services_ready() {
 
         printf "%s\n" "$jps_output" |
             grep -Eq "^[[:space:]]*[0-9]+[[:space:]]+ResourceManager([[:space:]]|$)"
+    '
 }
 
 echo "=== [BigData-N14] Khởi động cụm local 1 Master + 1 Worker ==="

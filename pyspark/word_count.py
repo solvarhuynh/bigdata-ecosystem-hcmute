@@ -15,7 +15,7 @@ def main():
     sc = spark.sparkContext
     sc.setLogLevel("WARN")
 
-    input_path = sys.argv[1] if len(sys.argv) > 1 else "hdfs:///test_bigdata/input/input_text_sample.txt"
+    input_path = sys.argv[1] if len(sys.argv) > 1 else "hdfs:///test_bigdata/input/description.txt"
     print(f"=== Đọc dữ liệu từ đường dẫn: {input_path} ===")
 
     lines = sc.textFile(input_path)

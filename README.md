@@ -72,7 +72,8 @@ MASTER_HOSTNAME=nghia-master
 
 Mỗi máy Worker thay `NODE_HOSTNAME`, `WORKER_LOGICAL_NAME` và `WORKER_IP` theo node
 đó. Các biến `WORKERn_IP` và `WORKERn_HOSTNAME` phải nhất quán trên Master và tất cả
-Worker.
+Worker. Mỗi máy dùng `.env` riêng với IP, hostname thực tế và bí danh logic của Worker
+tương ứng; không cần biến SSH runtime.
 
 ## Build image
 
@@ -181,10 +182,10 @@ docker compose --env-file .env -f docker/docker-compose.master.yml config --quie
 docker compose --env-file .env -f docker/docker-compose.worker.yml config --quiet
 ```
 
-Kiểm tra bí danh logic và SSH từ Master:
+Kiểm tra bí danh logic và SSH từ Master (thực hiện với user Hadoop đã được cấp key):
 
 ```powershell
-docker exec nghia-master bash -lc 'for n in worker1 worker2 worker3 worker4; do getent hosts "$n"; ssh -o BatchMode=yes -o ConnectTimeout=5 hadoopnghia@"$n" hostname; done'
+docker exec --user hadoopnghia nghia-master bash -lc 'for n in worker1 worker2 worker3 worker4; do getent hosts "$n"; ssh -o BatchMode=yes -o ConnectTimeout=5 hadoopnghia@"$n" hostname; done'
 ```
 
 Kiểm tra kết nối mạng từ Windows:
@@ -198,15 +199,17 @@ Docker Desktop Windows chạy container trong Linux VM. `network_mode: host` kh�
 đồng nghĩa với mạng Windows host hoặc mạng Tailscale. Cần bật Linux containers, cấu
 hình quyền truy cập VPN/WSL và firewall, sau đó kiểm tra kết nối thực tế giữa các máy.
 
-## SSH và bảo mật
+## SSH cho môi trường đồ án
 
-Image hiện tại tạo khóa SSH trong quá trình build để phục vụ môi trường học tập. Các
-container dùng chung image có thể dùng chung bộ khóa; không sử dụng thiết kế này cho
-môi trường production.
+Docker image tạo một SSH client key cho user `hadoopnghia` khi build và cài public key
+vào `authorized_keys` của cùng user. Các node dùng chung image nên dùng cùng client key.
+Host-key verification được tắt để đơn giản hóa môi trường lab; chỉ dùng trong mạng đồ án,
+không dùng key này cho tài khoản cá nhân, máy chủ bên ngoài hoặc dữ liệu nhạy cảm.
 
-Môi trường production nên tạo khóa riêng khi khởi tạo từng node và chỉ phân phối public
-key của Master tới `authorized_keys` của Worker bằng secret hoặc cơ chế mount được bảo
-vệ.
+Entry point tạo SSH server host key khi khởi động `sshd`. Khởi động lại cùng container
+giữ host key; recreate container có thể tạo host key mới. Hadoop daemon trong entrypoint
+được khởi động trực tiếp bằng `hdfs --daemon` và `yarn --daemon`, không cần SSH để bootstrap
+local mode. Cơ chế SSH vẫn có sẵn cho lệnh quản trị/kiểm tra liên node.
 
 ## Cấu trúc thư mục
 
@@ -224,8 +227,11 @@ data/         Dữ liệu mẫu
 Sau khi cụm được kiểm tra bằng `check_cluster.sh`, có thể chạy trên Master:
 
 ```bash
-hdfs dfs -put /opt/data/input_text_sample.txt /test_bigdata/input/
-hdfs dfs -put /opt/data/sales_sample.csv /test_bigdata/hive_sales/
+hdfs dfs -put /opt/data/description.txt /test_bigdata/input/
+
+# sales_warehouse yêu cầu CSV 17 cột theo hive/01_create_warehouse.sql.
+# data/online_retail.csv hiện có 8 cột và không tương thích với bảng này.
+# Chỉ nạp một CSV 17 cột đã được xác minh trước khi chạy các lệnh Hive bên dưới.
 
 spark-submit --master yarn --deploy-mode client /opt/pyspark/word_count.py
 spark-submit --master yarn --deploy-mode client /opt/pyspark/word_mean.py

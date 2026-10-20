@@ -18,29 +18,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     nano \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/ssh/ssh_host_*
 
 # 2. Tạo user `hadoopnghia` và cấu hình quyền sudo không cần password
 RUN useradd -m -s /bin/bash hadoopnghia && \
     usermod -aG sudo hadoopnghia && \
     echo "hadoopnghia ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# 3. Thiết lập SSH keys cho cả root và hadoopnghia (không password để tự do ssh liên node)
-RUN mkdir -p /root/.ssh && \
-    chmod 700 /root/.ssh && \
-    ssh-keygen -t rsa -P '' -f /root/.ssh/id_rsa && \
-    cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys && \
-    chmod 600 /root/.ssh/authorized_keys && \
-    echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config && \
-    echo "UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config
-
-USER hadoopnghia
-RUN mkdir -p /home/hadoopnghia/.ssh && \
-    chmod 700 /home/hadoopnghia/.ssh && \
-    ssh-keygen -t rsa -P '' -f /home/hadoopnghia/.ssh/id_rsa && \
+# 3. SSH client key dùng chung chỉ dành cho mạng lab của đồ án.
+RUN install -d -o hadoopnghia -g hadoopnghia -m 700 /home/hadoopnghia/.ssh && \
+    ssh-keygen -t rsa -b 3072 -N '' -f /home/hadoopnghia/.ssh/id_rsa && \
     cat /home/hadoopnghia/.ssh/id_rsa.pub >> /home/hadoopnghia/.ssh/authorized_keys && \
-    chmod 600 /home/hadoopnghia/.ssh/authorized_keys
-USER root
+    chown -R hadoopnghia:hadoopnghia /home/hadoopnghia/.ssh && \
+    chmod 600 /home/hadoopnghia/.ssh/id_rsa /home/hadoopnghia/.ssh/authorized_keys && \
+    printf '\nHost *\n    StrictHostKeyChecking no\n    UserKnownHostsFile /dev/null\n' >> /etc/ssh/ssh_config
 
 # 4. Thiết lập biến môi trường phiên bản và đường dẫn
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
