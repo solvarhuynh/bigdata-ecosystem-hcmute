@@ -3,7 +3,8 @@ set -e
 set -o pipefail
 
 target="${1:-}"
-timeout_seconds=120
+safemode_timeout_seconds=120
+hive_timeout_seconds=180
 case "$target" in
     local) expected=1 ;;
     full) expected=4 ;;
@@ -26,12 +27,12 @@ hadoop_exec() {
 
 wait_for_safemode_off() {
     local safe_mode_wait
-    if safe_mode_wait="$(hadoop_exec "timeout ${timeout_seconds}s /opt/hadoop/bin/hdfs dfsadmin -safemode wait" 2>&1)"; then
+    if safe_mode_wait="$(hadoop_exec "timeout ${safemode_timeout_seconds}s /opt/hadoop/bin/hdfs dfsadmin -safemode wait" 2>&1)"; then
         echo "${safe_mode_wait}"
         echo "SafeMode: OFF"
         return 0
     fi
-    echo "FAIL: hdfs dfsadmin -safemode wait thất bại hoặc timeout sau ${timeout_seconds}s."
+    echo "FAIL: hdfs dfsadmin -safemode wait thất bại hoặc timeout sau ${safemode_timeout_seconds}s."
     echo "--- SafeMode ---"
     hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -safemode get' 2>&1 || true
     echo "--- HDFS report ---"
@@ -41,6 +42,44 @@ wait_for_safemode_off() {
     echo "--- Master log ---"
     docker logs nghia-master --tail 120 2>&1 || true
     return 1
+}
+
+wait_for_hiveserver2() {
+    local attempt
+    local ready=false
+    for attempt in $(seq 1 "$hive_timeout_seconds"); do
+        if docker exec nghia-master bash -lc 'timeout 1 bash -c ": </dev/tcp/127.0.0.1/10000"' >/dev/null 2>&1; then
+            ready=true
+            break
+        fi
+        sleep 1
+    done
+
+    if [ "$ready" != true ]; then
+        echo "FAIL: HiveServer2 Thrift chưa lắng nghe sau ${hive_timeout_seconds}s."
+        echo "--- SafeMode ---"
+        hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -safemode get' 2>&1 || true
+        echo "--- HDFS report ---"
+        hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -report' 2>&1 || true
+        echo "--- YARN node list ---"
+        hadoop_exec '/opt/hadoop/bin/yarn node -list -all' 2>&1 || true
+        echo "--- Master log ---"
+        docker logs nghia-master --tail 120 2>&1 || true
+        echo "--- HiveServer2 log ---"
+        docker exec nghia-master tail -n 100 /opt/hive/logs/hiveserver2.log 2>&1 || true
+        return 1
+    fi
+
+    echo "HiveServer2 Thrift đang lắng nghe; kiểm tra JDBC bằng SHOW DATABASES..."
+    local jdbc_output
+    if ! jdbc_output="$(docker exec nghia-master su hadoopnghia -s /bin/bash -c "timeout 60s /opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/default -e 'SHOW DATABASES;'" 2>&1)"; then
+        echo "FAIL: HiveServer2 không hoàn tất truy vấn JDBC SHOW DATABASES."
+        printf '%s\n' "$jdbc_output"
+        echo "--- HiveServer2 log ---"
+        docker exec nghia-master tail -n 100 /opt/hive/logs/hiveserver2.log 2>&1 || true
+        return 1
+    fi
+    printf '%s\n' "$jdbc_output"
 }
 
 if ! report="$(hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -report' 2>&1)"; then
@@ -78,14 +117,22 @@ fi
 if ! wait_for_safemode_off; then
     exit 1
 fi
-if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /user/hive/warehouse /test_bigdata/input /test_bigdata/hive_sales'; then
+if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /tmp/hive /user/hive/warehouse /test_bigdata/input /test_bigdata/hive_sales'; then
     echo "FAIL: không tạo được thư mục HDFS; dừng trước bước chmod." >&2
     docker logs nghia-master --tail 120 2>&1 || true
     exit 1
 fi
-if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -chmod -R 777 /tmp /user/hive/warehouse /test_bigdata'; then
-    echo "FAIL: không cập nhật được quyền thư mục HDFS." >&2
+if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -chmod 1777 /tmp'; then
+    echo "FAIL: không cập nhật được quyền thư mục HDFS /tmp." >&2
     docker logs nghia-master --tail 120 2>&1 || true
     exit 1
 fi
-echo "PASS: ${expected} DataNode và ${expected} NodeManager đang hoạt động."
+if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -chmod 777 /tmp/hive /user/hive/warehouse /test_bigdata /test_bigdata/input /test_bigdata/hive_sales'; then
+    echo "FAIL: không cập nhật được quyền các thư mục HDFS của Hive/bài thực hành." >&2
+    docker logs nghia-master --tail 120 2>&1 || true
+    exit 1
+fi
+if ! wait_for_hiveserver2; then
+    exit 1
+fi
+echo "PASS: ${expected} DataNode, ${expected} NodeManager và HiveServer2 JDBC đang hoạt động."

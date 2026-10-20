@@ -5,6 +5,7 @@ services:
     image: bigdata-cluster:1.0
     container_name: ${NODE_HOSTNAME:-worker-container}
     hostname: ${NODE_HOSTNAME:-worker-container}
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
     network_mode: host
     environment:
       - NODE_ROLE=worker
@@ -23,7 +24,10 @@ services:
       - WORKER3_HOSTNAME=${WORKER3_HOSTNAME}
       - WORKER4_HOSTNAME=${WORKER4_HOSTNAME}
     volumes:
+      - ../docker/entrypoint.sh:/entrypoint.sh:ro
       - ../data:/opt/data
+      - ../config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - ../config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro
       - worker_datanode:/opt/hadoop/hdfs/datanode
     restart: unless-stopped
 

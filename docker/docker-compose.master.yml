@@ -4,6 +4,7 @@ services:
     image: bigdata-cluster:1.0
     container_name: nghia-master
     hostname: nghia-master
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
     network_mode: host
     environment:
       - NODE_ROLE=master
@@ -20,13 +21,20 @@ services:
       - WORKER3_HOSTNAME=${WORKER3_HOSTNAME}
       - WORKER4_HOSTNAME=${WORKER4_HOSTNAME}
     volumes:
+      - ../docker/entrypoint.sh:/entrypoint.sh:ro
       - ../data:/opt/data
       - ../pyspark:/opt/pyspark
       - ../hive:/opt/hive-scripts
+      - ../config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - ../config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro
       - master_namenode:/opt/hadoop/hdfs/namenode
       - master_hive_metastore:/opt/hive/metastore_db
     restart: unless-stopped
 
 volumes:
   master_namenode:
+    external: true
+    name: docker_local_namenode
   master_hive_metastore:
+    external: true
+    name: docker_local_hive_metastore

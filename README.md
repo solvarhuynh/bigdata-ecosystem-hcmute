@@ -83,6 +83,8 @@ bash scripts/build_image.sh
 
 Dockerfile hiển thị tiến độ tải các gói lớn, retry lỗi mạng tối đa năm lần, timeout kết
 nối 30 giây và timeout tải 1.800 giây. Image mặc định là `bigdata-cluster:1.0`.
+Các Compose file mount `docker/entrypoint.sh` từ source và gọi qua Bash, nên các thay đổi
+entrypoint không cần build lại image; cần recreate container để áp dụng Compose/mount mới.
 
 Để phân phối image cho các máy Worker:
 
@@ -121,6 +123,22 @@ Lệnh này có thể gây downtime trong thời gian container được thay m�
 named volume `master_namenode` hoặc `master_hive_metastore`. Không sử dụng
 `docker compose down -v`.
 
+Khi chỉ cập nhật entrypoint hoặc cấu hình đã bind-mount từ repository, áp dụng bằng cách
+recreate container tương ứng. Thao tác có thể gây downtime nhưng không xóa named volume:
+
+```powershell
+docker compose -f docker/docker-compose.master.yml --env-file .env up -d --force-recreate master
+docker compose -f docker/docker-compose.worker.yml --env-file .env up -d --force-recreate worker
+docker compose -f docker/docker-compose.local.yml up -d --force-recreate
+```
+
+Không dùng `docker compose down -v`.
+
+Master sẵn sàng ở bước đầu khi NameNode, ResourceManager và Metastore hoạt động. HiveServer2
+được khởi chạy nhưng có thể chưa mở cổng JDBC khi HDFS còn SafeMode; HiveServer2 sẽ thử lại
+sau khi Worker đăng ký. `start_master.sh` chỉ xác nhận các dịch vụ cốt lõi của Master, không
+xác nhận HiveServer2 hoặc toàn bộ cluster.
+
 ## Triển khai Worker
 
 Trên mỗi máy Worker:
@@ -153,7 +171,9 @@ bash scripts/check_cluster.sh local
 ```
 
 `test_local.sh` kiểm tra container Master và Worker cùng trạng thái `running` cũng như
-các dịch vụ Master. `check_cluster.sh local` mới xác nhận DataNode và NodeManager.
+NameNode, ResourceManager và Metastore. Sau đó `check_cluster.sh local` kiểm tra đủ
+DataNode/NodeManager, chờ SafeMode tắt, tạo các thư mục HDFS cần thiết và kiểm tra HiveServer2
+bằng truy vấn JDBC `SHOW DATABASES`.
 
 ## Hive
 
@@ -164,7 +184,8 @@ hive.metastore.port=9083
 hive.metastore.uris=thrift://nghia-master:9083
 ```
 
-Sau khi Master chạy, kiểm tra Metastore và HiveServer2:
+Sau khi Worker đã đăng ký và `check_cluster.sh local` hoặc `check_cluster.sh full` hoàn tất,
+kiểm tra Metastore và HiveServer2:
 
 ```powershell
 docker exec nghia-master bash -lc "ss -ltn | grep -E ':(9083|10000)\\s'"

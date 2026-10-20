@@ -22,7 +22,7 @@ print_node_failure() {
 master_services_ready() {
     docker exec "$1" bash -lc '
         set -e
-        for port in 9000 8032 9083 10000 10002; do
+        for port in 9000 8032 9083; do
             timeout 1 bash -c ": </dev/tcp/127.0.0.1/$port" >/dev/null 2>&1
         done
         jps_output="$(su hadoopnghia -s /bin/bash -c "jps")"
@@ -74,9 +74,9 @@ for attempt in $(seq 1 "$timeout_seconds"); do
 
     if [ "$master_state" = "running" ] && [ "$worker_state" = "running" ]; then
         if master_services_ready "$master_id"; then
-            echo "PASS: Master và Worker container đang running; các dịch vụ Master bắt buộc đang lắng nghe."
-            echo "Đây chưa phải xác nhận đủ DataNode/NodeManager hoặc toàn bộ cluster."
-            echo "Bước kiểm tra DataNode/NodeManager: bash scripts/check_cluster.sh local"
+            echo "PASS: Master core và Worker container đang running; NameNode, ResourceManager và Metastore đang lắng nghe."
+            echo "HiveServer2 JDBC cùng DataNode/NodeManager chưa được xác nhận ở bước này."
+            echo "Bước kiểm tra HDFS, YARN và Hive sau khi Worker đăng ký: bash scripts/check_cluster.sh local"
             docker compose -f "$compose_file" ps
             exit 0
         fi

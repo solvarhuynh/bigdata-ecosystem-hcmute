@@ -191,8 +191,9 @@ if [ "$NODE_ROLE" = "master" ]; then
     wait_for_tcp 8032 ResourceManager
 
     if run_as_hadoop "/opt/hadoop/bin/hdfs dfsadmin -safemode get" | grep -q 'Safe mode is OFF'; then
-        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /user/hive/warehouse /test_bigdata/input /test_bigdata/hive_sales"
-        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -chmod -R 777 /tmp /user/hive/warehouse /test_bigdata"
+        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /tmp/hive /user/hive/warehouse /test_bigdata/input /test_bigdata/hive_sales"
+        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -chmod 1777 /tmp"
+        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -chmod 777 /tmp/hive /user/hive/warehouse /test_bigdata /test_bigdata/input /test_bigdata/hive_sales"
     else
         echo "DataNode chưa đủ để thoát SafeMode; tạo thư mục HDFS sẽ do check_cluster.sh thực hiện sau."
     fi
@@ -221,10 +222,8 @@ if [ "$NODE_ROLE" = "master" ]; then
 
     echo "Khởi động HiveServer2..."
     run_as_hadoop "nohup /opt/hive/bin/hiveserver2 > '$hive_log_dir/hiveserver2.log' 2>&1 </dev/null &"
-    wait_for_tcp 10000 HiveServer2-Thrift
-    wait_for_tcp 10002 HiveServer2-WebUI
-
-    echo "Master services đã sẵn sàng: NameNode, ResourceManager, Metastore và HiveServer2 đang lắng nghe."
+    echo "Master core services đã sẵn sàng: NameNode, ResourceManager và Hive Metastore đang lắng nghe."
+    echo "HiveServer2 được khởi chạy; kiểm tra JDBC sau khi HDFS thoát SafeMode bằng scripts/check_cluster.sh."
 else
     echo ">>> Đang khởi động WORKER NODE (${WORKER_LOGICAL_NAME}) <<<"
     echo "Khởi động DataNode..."

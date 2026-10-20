@@ -28,4 +28,9 @@
         <name>dfs.permissions.enabled</name>
         <value>false</value>
     </property>
+
+    <property>
+        <name>dfs.namenode.rpc-bind-host</name>
+        <value>0.0.0.0</value>
+    </property>
 </configuration>

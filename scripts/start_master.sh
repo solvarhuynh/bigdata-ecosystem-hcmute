@@ -11,16 +11,16 @@ check_master_services() {
     local started_at="$1"
     if ! docker exec "$container" bash -lc '
         set -e
-        for port in 9000 8032 9083 10000 10002; do
+        for port in 9000 8032 9083; do
             timeout 1 bash -c ": </dev/tcp/127.0.0.1/$port" >/dev/null 2>&1
         done
         jps_output="$(su hadoopnghia -s /bin/bash -c "jps")"
-        printf "%s\n" "$jps_output" | grep -Eq "^NameNode[[:space:]]"
-        printf "%s\n" "$jps_output" | grep -Eq "^ResourceManager[[:space:]]"
+        printf "%s\n" "$jps_output" | grep -Eq "^[[:space:]]*[0-9]+[[:space:]]+NameNode([[:space:]]|$)"
+        printf "%s\n" "$jps_output" | grep -Eq "^[[:space:]]*[0-9]+[[:space:]]+ResourceManager([[:space:]]|$)"
     '; then
         return 1
     fi
-    docker logs "$container" --since "$started_at" 2>&1 | grep -q 'Master services đã sẵn sàng:'
+    docker logs "$container" --since "$started_at" 2>&1 | grep -F 'Master core services đã sẵn sàng:' >/dev/null
 }
 
 show_failure_logs() {
@@ -53,8 +53,8 @@ case "$state_before" in
         fi
         echo "${container} đang running; không restart container."
         if check_master_services "$run_started_at"; then
-            echo "PASS: Master services đang sẵn sàng; giữ nguyên container và volume hiện tại."
-            echo "Số Worker phải kiểm tra riêng bằng: bash scripts/check_cluster.sh full"
+            echo "PASS: Master core services đang sẵn sàng; giữ nguyên container và volume hiện tại."
+            echo "HiveServer2, DataNode và NodeManager sẽ được kiểm tra sau khi Worker khởi động: bash scripts/check_cluster.sh full"
             exit 0
         fi
         echo "ERROR: ${container} đang running nhưng Master services chưa sẵn sàng." >&2
@@ -124,9 +124,9 @@ for attempt in $(seq 1 "$timeout_seconds"); do
             ;;
         running)
             if check_master_services "$run_started_at"; then
-                echo "=== Master services đã sẵn sàng trong phiên khởi động hiện tại ==="
-                echo "Đã kiểm tra container running, cổng Master, NameNode/ResourceManager và log hiện tại."
-                echo "Số Worker phải kiểm tra riêng bằng: bash scripts/check_cluster.sh full"
+                echo "=== Master core services đã sẵn sàng trong phiên khởi động hiện tại ==="
+                echo "Đã kiểm tra container running, NameNode, ResourceManager, Metastore và log hiện tại."
+                echo "HiveServer2, DataNode và NodeManager sẽ được kiểm tra sau khi Worker khởi động: bash scripts/check_cluster.sh full"
                 exit 0
             fi
             ;;
