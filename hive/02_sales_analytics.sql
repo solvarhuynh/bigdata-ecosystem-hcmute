@@ -1,32 +1,52 @@
+
 -- 02_sales_analytics.sql
--- Các truy vấn phân tích bán hàng trên Hive Data Warehouse
+-- Phân tích dữ liệu Online Retail trên Hive
+
 USE bigdata_n14_db;
 
--- 1. Thống kê tổng doanh thu và số lượng đơn hàng theo từng Thành phố (City)
+-- 1. Tổng số hóa đơn, số lượng sản phẩm và doanh thu theo quốc gia
 SELECT
-    city,
-    COUNT(invoice_id) AS total_orders,
-    ROUND(SUM(total), 2) AS total_revenue,
-    ROUND(AVG(rating), 2) AS avg_rating
-FROM sales_warehouse
-GROUP BY city
+    country,
+    COUNT(DISTINCT invoice) AS total_invoices,
+    SUM(CAST(quantity AS INT)) AS total_quantity,
+    ROUND(
+        SUM(CAST(quantity AS INT) * CAST(price AS DOUBLE)), 2
+    ) AS total_revenue
+FROM online_retail
+WHERE invoice IS NOT NULL
+  AND quantity IS NOT NULL
+  AND price IS NOT NULL
+GROUP BY country
 ORDER BY total_revenue DESC;
 
--- 2. Thống kê tổng doanh thu theo Phương thức thanh toán (Payment)
+-- 2. Thống kê số lượng bán và doanh thu theo mã sản phẩm
 SELECT
-    payment,
-    COUNT(invoice_id) AS transaction_count,
-    ROUND(SUM(total), 2) AS total_spent
-FROM sales_warehouse
-GROUP BY payment
-ORDER BY total_spent DESC;
+    stockcode,
+    MAX(description) AS product_description,
+    SUM(CAST(quantity AS INT)) AS total_quantity,
+    ROUND(
+        SUM(CAST(quantity AS INT) * CAST(price AS DOUBLE)), 2
+    ) AS total_revenue
+FROM online_retail
+WHERE stockcode IS NOT NULL
+  AND quantity IS NOT NULL
+  AND price IS NOT NULL
+GROUP BY stockcode
+ORDER BY total_revenue DESC
+LIMIT 20;
 
--- 3. Thống kê doanh thu và lợi nhuận theo Nhóm sản phẩm (Product Line)
+-- 3. Thống kê doanh thu theo hóa đơn
 SELECT
-    product_line,
-    SUM(quantity) AS total_quantity_sold,
-    ROUND(SUM(total), 2) AS total_revenue,
-    ROUND(SUM(gross_income), 2) AS total_gross_income
-FROM sales_warehouse
-GROUP BY product_line
-ORDER BY total_revenue DESC;
+    invoice,
+    COUNT(*) AS line_items,
+    SUM(CAST(quantity AS INT)) AS total_quantity,
+    ROUND(
+        SUM(CAST(quantity AS INT) * CAST(price AS DOUBLE)), 2
+    ) AS invoice_revenue
+FROM online_retail
+WHERE invoice IS NOT NULL
+  AND quantity IS NOT NULL
+  AND price IS NOT NULL
+GROUP BY invoice
+ORDER BY invoice_revenue DESC
+LIMIT 20;

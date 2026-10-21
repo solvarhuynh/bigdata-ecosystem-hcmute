@@ -33,6 +33,11 @@
         <value>mapreduce_shuffle</value>
     </property>
 
+    <property>
+        <name>yarn.nodemanager.address</name>
+        <value>0.0.0.0:8041</value>
+    </property>
+
     <!-- Tắt kiểm tra bộ nhớ ảo để tránh bị YARN kill container trên Docker/WSL -->
     <property>
         <name>yarn.nodemanager.vmem-check-enabled</name>

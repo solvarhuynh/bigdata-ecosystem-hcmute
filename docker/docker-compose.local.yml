@@ -21,6 +21,8 @@ services:
       - "9083:9083"   # Hive Metastore Thrift
       - "10000:10000" # HiveServer2 JDBC
       - "10002:10002" # Hive Web UI
+      - "7078:7078"   # Spark driver RPC
+      - "7079-7095:7079-7095" # Spark BlockManager retry range
     networks:
       bigdata_lan:
         ipv4_address: 172.20.0.2
@@ -29,6 +31,8 @@ services:
       - ../data:/opt/data
       - ../config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
       - ../config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro
+      - ../pyspark:/opt/pyspark:ro
+      - ../hive:/opt/hive-scripts:ro
       - local_namenode:/opt/hadoop/hdfs/namenode
       - local_hive_metastore:/opt/hive/metastore_db
 

@@ -122,6 +122,12 @@ if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /tmp/hive /user/hive/w
     docker logs nghia-master --tail 120 2>&1 || true
     exit 1
 fi
+if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -test -s /test_bigdata/input/description.txt'; then
+    echo "FAIL: HDFS input /test_bigdata/input/description.txt không tồn tại hoặc rỗng." >&2
+    echo "Kiểm tra /opt/data/description.txt trên Master; nếu HDFS path chưa tồn tại, nạp file bằng hdfs dfs -put (không dùng -f)." >&2
+    docker logs nghia-master --tail 120 2>&1 || true
+    exit 1
+fi
 if ! hadoop_exec '/opt/hadoop/bin/hdfs dfs -chmod 1777 /tmp'; then
     echo "FAIL: không cập nhật được quyền thư mục HDFS /tmp." >&2
     docker logs nghia-master --tail 120 2>&1 || true

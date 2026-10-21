@@ -37,7 +37,9 @@ dùng hostname `An-worker`, còn Hadoop vẫn kết nối tới bí danh `worker
 - Bash shell thông qua WSL, Git Bash hoặc Linux.
 - Với triển khai nhiều máy: các máy phải truy cập được IP của nhau, phân giải được
   các bí danh logic và cho phép SSH trên cổng 22.
-- Các cổng chính: 22, 8030-8033, 8088, 9000, 9870, 9083, 10000 và 10002.
+- Cổng Master: 22, 7078-7095, 8030-8033, 8088, 9000, 9870, 9083, 10000 và 10002.
+- Cổng Worker: 22, 8040-8042, 9864, 9866, 9867 và 13562. Chỉ cho phép lưu lượng
+  cần thiết giữa các IP Tailscale của các node.
 
 ## Cấu hình môi trường
 
@@ -85,6 +87,9 @@ Dockerfile hiển thị tiến độ tải các gói lớn, retry lỗi mạng t
 nối 30 giây và timeout tải 1.800 giây. Image mặc định là `bigdata-cluster:1.0`.
 Các Compose file mount `docker/entrypoint.sh` từ source và gọi qua Bash, nên các thay đổi
 entrypoint không cần build lại image; cần recreate container để áp dụng Compose/mount mới.
+`config/spark/spark-defaults.conf` được COPY vào image, vì vậy thay đổi cấu hình Spark cần
+build lại image, phân phối cùng image đó cho các máy và recreate Master. `yarn-site.xml`
+được bind-mount; thay đổi cấu hình này cần recreate Master và Worker để daemon nạp lại.
 
 Để phân phối image cho các máy Worker:
 
@@ -155,7 +160,7 @@ bash scripts/check_cluster.sh full
 
 Script hiển thị số DataNode và NodeManager kỳ vọng/thực tế. Script chờ SafeMode tối đa
 120 giây; nếu SafeMode chưa tắt hoặc lệnh HDFS thất bại, script dừng trước khi tạo thư
-mục HDFS.
+mục HDFS. Nó cũng yêu cầu input `/test_bigdata/input/description.txt` tồn tại và không rỗng.
 
 ## Chạy local
 
@@ -188,7 +193,7 @@ Sau khi Worker đã đăng ký và `check_cluster.sh local` hoặc `check_cluste
 kiểm tra Metastore và HiveServer2:
 
 ```powershell
-docker exec nghia-master bash -lc "ss -ltn | grep -E ':(9083|10000)\\s'"
+docker exec nghia-master bash -lc "netstat -lnt | grep -E ':(9083|10000)\\s'"
 docker exec nghia-master bash -lc "beeline -u 'jdbc:hive2://nghia-master:10000/default' -e 'show databases;'"
 docker exec nghia-master bash -lc "tail -n 80 /opt/hive/logs/metastore.log /opt/hive/logs/hiveserver2.log"
 ```
@@ -217,8 +222,21 @@ Test-NetConnection <MASTER_IP> -Port 9000
 ```
 
 Docker Desktop Windows chạy container trong Linux VM. `network_mode: host` không tự
-đồng nghĩa với mạng Windows host hoặc mạng Tailscale. Cần bật Linux containers, cấu
-hình quyền truy cập VPN/WSL và firewall, sau đó kiểm tra kết nối thực tế giữa các máy.
+đồng nghĩa với mạng Windows host hoặc mạng Tailscale. Docker Desktop 4.34 trở lên yêu cầu
+đăng nhập, bật Settings > Resources > Network > Enable host networking rồi Apply & restart.
+Tính năng chỉ áp dụng cho Linux containers, hoạt động ở layer 4 (TCP/UDP), không cho
+container bind trực tiếp vào IP của host và không tương thích Enhanced Container Isolation.
+Cấu hình local dùng bridge nên không chứng minh host networking hay kết nối Tailscale liên
+máy. Xem [Docker host network driver](https://docs.docker.com/engine/network/drivers/host/)
+để biết điều kiện và giới hạn hiện hành.
+
+Spark chạy ở client mode. Driver quảng bá bí danh `nghia-master` (được entrypoint ánh xạ
+tới `MASTER_IP` trên mỗi node), bind trên mọi interface và dùng TCP 7078. BlockManager
+dùng 7079-7095 để các tiến trình executor trên cùng máy có thể chọn cổng kế tiếp khi cần.
+Cho phép TCP 7078-7095 giữa Master và Worker, giới hạn nguồn vào các peer Tailscale.
+NodeManager RPC được cố định ở TCP 8041. Trước khi cố định, local YARN đã đăng ký trên
+cổng động. Sau khi áp dụng cấu hình mới, kiểm tra node list để xác nhận Worker báo cổng
+8041; cần recreate Worker để nạp cấu hình mới.
 
 ## SSH cho môi trường đồ án
 
@@ -245,20 +263,32 @@ data/         Dữ liệu mẫu
 
 ## Bài thực hành
 
-Sau khi cụm được kiểm tra bằng `check_cluster.sh`, có thể chạy trên Master:
+Sau khi Master và các Worker đã khởi động, chạy `check_cluster.sh` để xác nhận node,
+SafeMode, input và Hive JDBC. Nếu script báo thiếu input, kiểm tra file nguồn và HDFS path;
+script đã tạo thư mục đích. Chỉ nạp khi xác nhận file đích chưa tồn tại; `-put` không ghi đè:
 
-```bash
-hdfs dfs -put /opt/data/description.txt /test_bigdata/input/
+```powershell
+# Chỉ chạy dòng upload nếu HDFS file thực sự chưa tồn tại.
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hadoop/bin/hdfs dfs -test -s /test_bigdata/input/description.txt"
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hadoop/bin/hdfs dfs -put /opt/data/description.txt /test_bigdata/input/description.txt"
+```
 
-# sales_warehouse yêu cầu CSV 17 cột theo hive/01_create_warehouse.sql.
-# data/online_retail.csv hiện có 8 cột và không tương thích với bảng này.
-# Chỉ nạp một CSV 17 cột đã được xác minh trước khi chạy các lệnh Hive bên dưới.
+Nếu `-test -s` thất bại nhưng file đích vẫn có trong `hdfs dfs -ls`, không upload đè; hãy
+kiểm tra file đó thủ công. Sau khi nạp input còn thiếu, chạy lại `check_cluster.sh` rồi mới
+chạy Spark. Bốn bài Spark chỉ đọc input trên HDFS và in kết quả ra driver:
 
-spark-submit --master yarn --deploy-mode client /opt/pyspark/word_count.py
-spark-submit --master yarn --deploy-mode client /opt/pyspark/word_mean.py
-spark-submit --master yarn --deploy-mode client /opt/pyspark/word_median.py
-spark-submit --master yarn --deploy-mode client /opt/pyspark/word_std_dev.py
+```powershell
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/spark/bin/spark-submit --master yarn --deploy-mode client /opt/pyspark/word_count.py"
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/spark/bin/spark-submit --master yarn --deploy-mode client /opt/pyspark/word_mean.py"
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/spark/bin/spark-submit --master yarn --deploy-mode client /opt/pyspark/word_median.py"
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/spark/bin/spark-submit --master yarn --deploy-mode client /opt/pyspark/word_std_dev.py"
+```
 
-hive -f /opt/hive-scripts/01_create_warehouse.sql
-hive -f /opt/hive-scripts/02_sales_analytics.sql
+Sales analytics chỉ chạy sau khi đã xác minh dữ liệu CSV 17 cột được nạp vào
+`/test_bigdata/hive_sales`. File `data/online_retail.csv` hiện có 8 cột, không tương thích
+với DDL trong `hive/01_create_warehouse.sql`.
+
+```powershell
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/default -f /opt/hive-scripts/01_create_warehouse.sql"
+docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/bigdata_n14_db -f /opt/hive-scripts/02_sales_analytics.sql"
 ```
