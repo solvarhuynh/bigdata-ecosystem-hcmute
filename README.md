@@ -77,6 +77,40 @@ Mỗi máy Worker thay `NODE_HOSTNAME`, `WORKER_LOGICAL_NAME` và `WORKER_IP` th
 Worker. Mỗi máy dùng `.env` riêng với IP, hostname thực tế và bí danh logic của Worker
 tương ứng; không cần biến SSH runtime.
 
+## Cấu hình và đăng ký DataNode
+
+`config/hadoop/hdfs-site.xml` là cấu hình HDFS dùng chung cho Master, Worker và local
+Compose. Worker Compose bắt buộc nhận đủ `NODE_HOSTNAME`, `WORKER_LOGICAL_NAME`,
+`WORKER_IP`, `MASTER_IP` cùng mapping `WORKER1_*` đến `WORKER4_*`; thiếu biến thì
+`docker compose config` dừng thay vì tạo đường dẫn cấu hình sai. Ví dụ, máy có hostname
+`An-worker` được phân công alias `worker1` sẽ có `NODE_HOSTNAME=An-worker`,
+`WORKER_LOGICAL_NAME=worker1`, `WORKER_IP` bằng địa chỉ IPv4 của máy đó,
+`WORKER1_HOSTNAME=An-worker` và `WORKER1_IP` bằng cùng địa chỉ IP.
+
+Khi khởi động Worker, entrypoint sao chép cấu hình Hadoop vào
+`/tmp/bigdata-hadoop-conf`, chỉ bổ sung `dfs.datanode.hostname` từ `NODE_HOSTNAME`, rồi
+kiểm tra cấu hình hiệu lực trước khi chạy daemon. `dfs.datanode.address=0.0.0.0:9866`
+là địa chỉ bind trong container, không phải địa chỉ có thể truy cập từ LAN/Tailscale.
+Alias `workerN` và hostname thực tế cùng được ánh xạ tới IP cấu hình. Worker chỉ báo
+đăng ký thành công khi NameNode nhìn thấy hostname đó qua endpoint không phải loopback;
+script cũng chờ NodeManager đăng ký với ResourceManager.
+
+`dfs.client.use.datanode.hostname=true` và
+`dfs.datanode.use.datanode.hostname=true` yêu cầu client/DataNode tự phân giải hostname;
+chúng không biến `127.0.0.1` thành địa chỉ mạng có thể định tuyến. Trong
+`hdfs dfsadmin -report`, từng Worker phải có hostname khác nhau, endpoint `Name` khác
+nhau và không phải loopback. `scripts/check_cluster.sh full` kiểm tra số lượng, endpoint,
+hostname DataNode cùng NodeManager, đồng thời đối chiếu IP endpoint `Name` với IP Worker
+đã cấu hình trước khi kiểm tra HDFS/Hive.
+
+Xem cấu hình runtime ngay trên máy Worker:
+
+```powershell
+docker exec --user hadoopnghia bigdata-worker1 env HADOOP_CONF_DIR=/tmp/bigdata-hadoop-conf /opt/hadoop/bin/hdfs getconf -confKey dfs.datanode.hostname
+docker exec --user hadoopnghia bigdata-worker1 env HADOOP_CONF_DIR=/tmp/bigdata-hadoop-conf /opt/hadoop/bin/hdfs getconf -confKey dfs.datanode.address
+docker exec --user hadoopnghia bigdata-worker1 env HADOOP_CONF_DIR=/tmp/bigdata-hadoop-conf /opt/hadoop/bin/hdfs getconf -confKey dfs.datanode.use.datanode.hostname
+```
+
 ## Build image
 
 ```bash
@@ -149,8 +183,12 @@ xác nhận HiveServer2 hoặc toàn bộ cluster.
 Trên mỗi máy Worker:
 
 ```bash
-docker compose -f docker/docker-compose.worker.yml --env-file .env up -d
+docker compose --env-file .env -f docker/docker-compose.worker.yml config --quiet
+docker compose --env-file .env -f docker/docker-compose.worker.yml up -d --force-recreate worker
 ```
+
+Chỉ rollout từng Worker sau khi mapping được xác nhận. Recreate gây downtime cho Worker
+đó nhưng giữ named volume; không chạy lệnh xóa volume.
 
 Sau khi khởi động đủ Worker, chạy trên Master:
 
@@ -227,8 +265,51 @@ Docker Desktop Windows chạy container trong Linux VM. `network_mode: host` kh�
 Tính năng chỉ áp dụng cho Linux containers, hoạt động ở layer 4 (TCP/UDP), không cho
 container bind trực tiếp vào IP của host và không tương thích Enhanced Container Isolation.
 Cấu hình local dùng bridge nên không chứng minh host networking hay kết nối Tailscale liên
-máy. Xem [Docker host network driver](https://docs.docker.com/engine/network/drivers/host/)
-để biết điều kiện và giới hạn hiện hành.
+máy. Trước khi triển khai hàng loạt, thử một Worker và xác minh endpoint DataNode trong
+NameNode report là duy nhất, không loopback, cùng với kết nối TCP qua địa chỉ mạng thực tế.
+Nếu endpoint còn trùng/loopback, dừng rollout và chọn lại giữa host networking đã kiểm
+chứng, bridge kèm port publishing đầy đủ, hoặc runtime/host khác.
+Bridge + publish chưa được cấu hình vì cần kiểm thử cả HDFS, YARN, shuffle và Spark,
+không chỉ cổng DataNode. Xem [Hadoop 3.4.0 HDFS multihoming](https://hadoop.apache.org/docs/r3.4.0/hadoop-project-dist/hadoop-hdfs/HdfsMultihoming.html),
+[Docker host network driver](https://docs.docker.com/engine/network/drivers/host/) và
+[Docker Desktop networking](https://docs.docker.com/desktop/features/networking/).
+
+Các phương án mạng cho triển khai nhiều máy:
+
+- `network_mode: host` (Compose hiện tại): dùng cùng namespace mạng của container host.
+  Trên Docker Desktop cần bản 4.34 trở lên, đăng nhập và bật host networking; container
+  không có IP riêng, không bind trực tiếp được vào interface Tailscale của Windows và
+  chỉ hỗ trợ lưu lượng TCP/UDP. Việc Compose khai báo host mode không chứng minh NameNode
+  nhận được địa chỉ DataNode có thể định tuyến qua Tailscale.
+- Bridge kèm publish: có port forwarding rõ ràng, nhưng phải publish và kiểm tra đầu-cuối
+  các cổng HDFS (Master RPC 9000; Worker DataNode 9866, HTTP 9864, IPC 9867), YARN
+  (Master 8030-8033; Worker 8040-8042 và shuffle 13562), NameNode/RM web 9870/8088,
+  Hive 9083/10000/10002, SSH 22 nếu dùng, và Spark driver/block-manager 7078-7095.
+  Host-port và container-port của DataNode phải thống nhất với endpoint Hadoop quảng bá;
+  Docker Desktop mặc định publish trên mọi interface nên cần kiểm tra khả năng giới hạn
+  interface/firewall trên từng máy.
+- Runtime khác: Docker Engine native Linux hoặc host/container runtime có địa chỉ được
+  định tuyến rõ ràng có thể tránh lớp mạng Docker Desktop, nhưng cần thử cùng cổng, DNS,
+  Tailscale và firewall thực tế trước khi chọn.
+
+Chưa chọn hoặc triển khai network model mới: cần kiểm tra TCP hai chiều giữa các máy và
+đối chiếu log runtime của Worker. Xác minh một Worker trước; nếu endpoint NameNode còn
+loopback/trùng, dừng rollout và quyết định phương án mạng sau khi đo kết quả. Không xem
+DNS/`getent` là bằng chứng TCP/Tailscale hoạt động.
+
+Sau khi duyệt source/image, trên từng Worker kiểm tra Compose rồi recreate riêng service
+để áp dụng cấu hình mới. Thao tác gây downtime cho Worker đó nhưng giữ named volume nếu
+không dùng lệnh xóa volume:
+
+```powershell
+docker compose --env-file .env -f docker/docker-compose.worker.yml config --quiet
+docker compose --env-file .env -f docker/docker-compose.worker.yml up -d --force-recreate worker
+```
+
+Sau khi một Worker khởi động, kiểm tra `docker logs bigdata-worker1`; từ Master chạy
+`bash scripts/check_cluster.sh full` sau khi các Worker dự kiến đã lên. Nếu DataNode
+endpoint trùng/loopback hoặc đăng ký timeout, dừng rollout và gửi log cùng HDFS report;
+không xóa volume, format NameNode hoặc xóa dữ liệu.
 
 Spark chạy ở client mode. Driver quảng bá bí danh `nghia-master` (được entrypoint ánh xạ
 tới `MASTER_IP` trên mỗi node), bind trên mọi interface và dùng TCP 7078. BlockManager

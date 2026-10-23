@@ -34,9 +34,27 @@
         <value>0.0.0.0</value>
     </property>
     
-    <!-- Dùng hostname của DataNode thay vì IP được quảng bá -->
+    <!-- Bind cổng DataNode trên mọi interface; không phải địa chỉ quảng bá ra ngoài. -->
+    <property>
+        <name>dfs.datanode.address</name>
+        <value>0.0.0.0:9866</value>
+    </property>
+    <property>
+        <name>dfs.datanode.http.address</name>
+        <value>0.0.0.0:9864</value>
+    </property>
+    <property>
+        <name>dfs.datanode.ipc.address</name>
+        <value>0.0.0.0:9867</value>
+    </property>
+
+    <!-- Client và DataNode khác tra hostname quảng bá qua mapping runtime. -->
     <property>
         <name>dfs.client.use.datanode.hostname</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>dfs.datanode.use.datanode.hostname</name>
         <value>true</value>
     </property>
 </configuration>

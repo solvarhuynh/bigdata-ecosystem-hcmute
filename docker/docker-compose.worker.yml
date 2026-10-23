@@ -3,30 +3,30 @@
 services:
   worker:
     image: bigdata-cluster:1.0
-    container_name: ${NODE_HOSTNAME:-worker-container}
-    hostname: ${NODE_HOSTNAME:-worker-container}
+    container_name: "bigdata-${WORKER_LOGICAL_NAME:?Set WORKER_LOGICAL_NAME to worker1, worker2, worker3 or worker4}"
+    hostname: "${NODE_HOSTNAME:?Set NODE_HOSTNAME to this machine's actual hostname}"
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
     network_mode: host
     environment:
-      - NODE_ROLE=worker
-      - CLUSTER_SIZE=4
-      - NODE_HOSTNAME=${NODE_HOSTNAME}
-      - WORKER_LOGICAL_NAME=${WORKER_LOGICAL_NAME}
-      - WORKER_IP=${WORKER_IP}
-      - MASTER_IP=${MASTER_IP}
-      - WORKER1_IP=${WORKER1_IP}
-      - WORKER2_IP=${WORKER2_IP}
-      - WORKER3_IP=${WORKER3_IP}
-      - WORKER4_IP=${WORKER4_IP}
-      - MASTER_HOSTNAME=${MASTER_HOSTNAME:-nghia-master}
-      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME}
-      - WORKER2_HOSTNAME=${WORKER2_HOSTNAME}
-      - WORKER3_HOSTNAME=${WORKER3_HOSTNAME}
-      - WORKER4_HOSTNAME=${WORKER4_HOSTNAME}
+      NODE_ROLE: worker
+      CLUSTER_SIZE: "4"
+      NODE_HOSTNAME: "${NODE_HOSTNAME:?Set NODE_HOSTNAME to this machine's actual hostname}"
+      WORKER_LOGICAL_NAME: "${WORKER_LOGICAL_NAME:?Set WORKER_LOGICAL_NAME to worker1, worker2, worker3 or worker4}"
+      WORKER_IP: "${WORKER_IP:?Set WORKER_IP to this worker's reachable IPv4 address}"
+      MASTER_IP: "${MASTER_IP:?Set MASTER_IP to the Master's reachable IPv4 address}"
+      MASTER_HOSTNAME: "${MASTER_HOSTNAME:-nghia-master}"
+      WORKER1_IP: "${WORKER1_IP:?Set WORKER1_IP in the cluster mapping}"
+      WORKER2_IP: "${WORKER2_IP:?Set WORKER2_IP in the cluster mapping}"
+      WORKER3_IP: "${WORKER3_IP:?Set WORKER3_IP in the cluster mapping}"
+      WORKER4_IP: "${WORKER4_IP:?Set WORKER4_IP in the cluster mapping}"
+      WORKER1_HOSTNAME: "${WORKER1_HOSTNAME:?Set WORKER1_HOSTNAME in the cluster mapping}"
+      WORKER2_HOSTNAME: "${WORKER2_HOSTNAME:?Set WORKER2_HOSTNAME in the cluster mapping}"
+      WORKER3_HOSTNAME: "${WORKER3_HOSTNAME:?Set WORKER3_HOSTNAME in the cluster mapping}"
+      WORKER4_HOSTNAME: "${WORKER4_HOSTNAME:?Set WORKER4_HOSTNAME in the cluster mapping}"
     volumes:
       - ../docker/entrypoint.sh:/entrypoint.sh:ro
       - ../data:/opt/data
-      - ../config/hadoop/hdfs-site-${WORKER_LOGICAL_NAME}.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
+      - ../config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
       - ../config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro
       - worker_datanode:/opt/hadoop/hdfs/datanode
     restart: unless-stopped

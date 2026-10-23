@@ -16,6 +16,7 @@ debug-logs/
 metastore_db/
 derby.log
 tmp/
+docs/
 
 # Local backups and generated metadata
 backups/
