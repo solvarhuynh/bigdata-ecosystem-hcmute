@@ -34,7 +34,7 @@
         <value>0.0.0.0</value>
     </property>
     
-    <!-- Bind cổng DataNode trên mọi interface; không phải địa chỉ quảng bá ra ngoài. -->
+    <!-- Giá trị nền; Worker thay port runtime theo WORKER_LOGICAL_NAME để tránh NAT endpoint collision. -->
     <property>
         <name>dfs.datanode.address</name>
         <value>0.0.0.0:9866</value>

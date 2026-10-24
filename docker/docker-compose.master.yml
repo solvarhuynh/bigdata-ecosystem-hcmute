@@ -30,6 +30,10 @@ services:
       - WORKER2_IP=${WORKER2_IP:?Set WORKER2_IP in the cluster mapping}
       - WORKER3_IP=${WORKER3_IP:?Set WORKER3_IP in the cluster mapping}
       - WORKER4_IP=${WORKER4_IP:?Set WORKER4_IP in the cluster mapping}
+      - WORKER1_XFER_PORT=${WORKER1_XFER_PORT:?Set WORKER1_XFER_PORT in the cluster mapping}
+      - WORKER2_XFER_PORT=${WORKER2_XFER_PORT:?Set WORKER2_XFER_PORT in the cluster mapping}
+      - WORKER3_XFER_PORT=${WORKER3_XFER_PORT:?Set WORKER3_XFER_PORT in the cluster mapping}
+      - WORKER4_XFER_PORT=${WORKER4_XFER_PORT:?Set WORKER4_XFER_PORT in the cluster mapping}
       - WORKER1_HOSTNAME=${WORKER1_HOSTNAME:?Set WORKER1_HOSTNAME in the cluster mapping}
       - WORKER2_HOSTNAME=${WORKER2_HOSTNAME:?Set WORKER2_HOSTNAME in the cluster mapping}
       - WORKER3_HOSTNAME=${WORKER3_HOSTNAME:?Set WORKER3_HOSTNAME in the cluster mapping}

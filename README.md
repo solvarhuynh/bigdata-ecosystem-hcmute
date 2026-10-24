@@ -40,8 +40,9 @@ dùng hostname `An-worker`, còn Hadoop vẫn kết nối tới bí danh `worker
 - Với triển khai nhiều máy: các máy phải truy cập được địa chỉ của nhau, phân giải được
   hostname DataNode và bí danh logic, đồng thời cho phép đúng các cổng cần thiết.
 - Cổng Master: 22, 7078-7095, 8030-8033, 8088, 9000, 9870, 9083, 10000 và 10002.
-- Cổng Worker: 22, 7079-7095 (Spark BlockManager), 8040-8042, 9864, 9866, 9867 và
-  13562. Compose publish các cổng này riêng lên `WORKER_IP`; giới hạn Windows Defender
+- Cổng Worker: 22, 7079-7095 (Spark BlockManager), 8040-8042, 9864, 9867, 13562 và
+  cổng DataNode transfer riêng theo Worker (mặc định 19866-19869). Compose publish
+  các cổng này riêng lên `WORKER_IP`; giới hạn Windows Defender
   Firewall chỉ cho các peer tin cậy và không mở ra Internet công cộng.
 
 ## Cấu hình môi trường
@@ -64,10 +65,15 @@ WORKER1_IP=<IP-that-cua-Worker-1>
 WORKER2_IP=<IP-that-cua-Worker-2>
 WORKER3_IP=<IP-that-cua-Worker-3>
 WORKER4_IP=<IP-that-cua-Worker-4>
+WORKER1_XFER_PORT=19866
+WORKER2_XFER_PORT=19867
+WORKER3_XFER_PORT=19868
+WORKER4_XFER_PORT=19869
 
 NODE_HOSTNAME=An-worker
 WORKER_LOGICAL_NAME=worker1
 WORKER_IP=<IP-that-cua-An>
+WORKER_XFER_PORT=19866
 
 WORKER1_HOSTNAME=An-worker
 WORKER2_HOSTNAME=Binh-slave
@@ -81,8 +87,9 @@ Deployment Compose forwards `MASTER_START_PHASE` into the Master container and d
 `MASTER_START_PHASE=full` directly in its Master service, so its phase does not depend on the
 host `.env` value.
 
-Mỗi máy Worker thay `NODE_HOSTNAME`, `WORKER_LOGICAL_NAME` và `WORKER_IP` theo node
-đó. Các biến `WORKERn_IP` và `WORKERn_HOSTNAME` phải nhất quán trên Master và tất cả
+Mỗi máy Worker thay `NODE_HOSTNAME`, `WORKER_LOGICAL_NAME`, `WORKER_IP` và
+`WORKER_XFER_PORT` theo node đó. Các biến `WORKERn_IP`, `WORKERn_HOSTNAME` và
+`WORKERn_XFER_PORT` phải nhất quán trên Master và tất cả
 Worker. Mỗi máy dùng `.env` riêng với IP, hostname thực tế và bí danh logic của Worker
 tương ứng; tên container triển khai cũng chính là `NODE_HOSTNAME` (ví dụ
 `khang-worker`), không dùng tiền tố `bigdata-`. Không cần biến SSH runtime.
@@ -95,26 +102,43 @@ Compose. Worker Compose bắt buộc nhận đủ `NODE_HOSTNAME`, `WORKER_LOGIC
 `docker compose config` dừng thay vì tạo đường dẫn cấu hình sai. Ví dụ, máy có hostname
 `An-worker` được phân công alias `worker1` sẽ có `NODE_HOSTNAME=An-worker`,
 `WORKER_LOGICAL_NAME=worker1`, `WORKER_IP` bằng địa chỉ IPv4 của máy đó,
-`WORKER1_HOSTNAME=An-worker` và `WORKER1_IP` bằng cùng địa chỉ IP.
+`WORKER1_HOSTNAME=An-worker`, `WORKER1_IP` bằng cùng địa chỉ IP và
+`WORKER_XFER_PORT=WORKER1_XFER_PORT=19866`. Các cổng `WORKERn_XFER_PORT` phải khác
+nhau; Compose publish cùng cổng trên host và trong container.
 
 Khi khởi động Worker, entrypoint sao chép cấu hình Hadoop vào
-`/tmp/bigdata-hadoop-conf`, chỉ bổ sung `dfs.datanode.hostname` từ `NODE_HOSTNAME`, rồi
-kiểm tra cấu hình hiệu lực trước khi chạy daemon. `dfs.datanode.address=0.0.0.0:9866`
-là địa chỉ bind trong container, không phải địa chỉ có thể truy cập từ LAN/Tailscale.
+`/tmp/bigdata-hadoop-conf`, đặt `dfs.datanode.hostname` từ `NODE_HOSTNAME` và
+`dfs.datanode.address=0.0.0.0:$WORKER_XFER_PORT`, rồi kiểm tra cấu hình hiệu lực trước
+khi chạy daemon. `dfs.datanode.address` là địa chỉ bind trong container, không phải
+địa chỉ có thể truy cập từ LAN/Tailscale.
 Alias `workerN` và hostname thực tế cùng được ánh xạ tới IP cấu hình. Worker chỉ báo
 đăng ký thành công khi NameNode nhìn thấy hostname đó qua endpoint mới, không-loopback;
 script cũng chờ NodeManager đăng ký với ResourceManager. Endpoint `Name` trong HDFS report
 không bị giả định phải bằng `WORKER_IP`; cần kiểm tra endpoint thực tế, hostname mapping và
 khả năng truy cập riêng.
 
+Với Hadoop 3.4.0, NameNode thay IP trong đăng ký bằng địa chỉ nguồn của kết nối RPC. Trên
+Docker Desktop các Worker có thể cùng xuất hiện với IP NAT của Docker; Hadoop cũng loại
+DataNode cũ nếu một đăng ký khác dùng cùng cặp IP/transfer-port. Vì vậy mỗi bí danh Worker
+có transfer port riêng (19866-19869 mặc định), còn hostname thực tế tiếp tục là địa chỉ
+client/peer dùng khi hostname mode bật. `dfs.namenode.datanode.registration.ip-hostname-check=false`
+chỉ bỏ kiểm tra phân giải IP/hostname, không giữ lại IP DataNode tự quảng bá; cấu hình này
+được giữ để chấp nhận NAT hostname mismatch, còn tính duy nhất được bảo đảm bằng transfer
+port. Đây là giải pháp phù hợp theo mã nguồn Hadoop 3.4.0, chưa phải xác nhận runtime trên
+Docker Desktop/Tailscale. Xem [logic đăng ký DataNode trong Hadoop 3.4.0](https://github.com/apache/hadoop/blob/rel/release-3.4.0/hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/blockmanagement/DatanodeManager.java#L1159-L1203).
+
 `dfs.client.use.datanode.hostname=true` và
 `dfs.datanode.use.datanode.hostname=true` khiến HDFS client/DataNode phân giải hostname
 được báo cáo để truyền block; chúng không chứng minh endpoint `Name` thực tế có thể truy cập.
 Trong `hdfs dfsadmin -report`, endpoint phải duy nhất và không-loopback, hostname mỗi Worker
 phải đúng và có capacity/block report. `scripts/check_cluster.sh local|pilot|full` kiểm tra hostname
-phân giải tới IP đã cấu hình, TCP tới cổng transfer 9866, NodeManager RUNNING và HDFS fsck.
+phân giải tới IP đã cấu hình, TCP tới transfer port gán cho từng Worker, NodeManager RUNNING
+và HDFS fsck.
 Các kiểm tra này chưa chứng minh được Tailscale/Docker Desktop hoạt động cho tới khi script
 được chạy trên cluster thật.
+Việc tách transfer port không thay đổi volume hay thư mục DataNode. `Configured Capacity: 0`
+hoặc `Last Block Report: Never` là lỗi trạng thái lưu trữ/report riêng; health gate sẽ dừng,
+cần xem DataNode log, mount và quyền đọc/ghi thay vì format hoặc xóa metadata.
 
 Registration freshness so sánh thời điểm DataNode bắt đầu với `Last contact` do NameNode báo,
 nên đồng hồ Windows trên Master và Worker phải được đồng bộ. Trên từng máy, kiểm tra trước khi
@@ -195,8 +219,9 @@ thư mục đích. Entry point không format NameNode.
 Mỗi máy dùng `.env` riêng. Với Khang, đặt `NODE_HOSTNAME=khang-worker`,
 `WORKER_LOGICAL_NAME=worker1`, `WORKER_IP` bằng `WORKER1_IP`; với Hồng Khoa đặt
 `NODE_HOSTNAME=hongkhoa-worker`, `WORKER_LOGICAL_NAME=worker3`, `WORKER_IP` bằng
-`WORKER3_IP`. Hostname thực tế do nhóm chọn; bí danh Hadoop giữ nguyên `worker1`/`worker3`
-và không đổi `config/hadoop/workers`.
+`WORKER3_IP`. Đặt lần lượt `WORKER_XFER_PORT=19866` và `WORKER_XFER_PORT=19868`;
+các worker còn lại dùng 19867 và 19869. Hostname thực tế do nhóm chọn; bí danh Hadoop
+giữ nguyên `worker1`/`worker3` và không đổi `config/hadoop/workers`.
 
 Trên từng Worker, trước mỗi recreate, xác nhận container hiện tại đang mount đúng DataNode
 volume tại `/opt/hadoop/hdfs/datanode`. So sánh tên volume thực tế với Compose project/volume
@@ -245,8 +270,9 @@ bash scripts/check_cluster.sh pilot
 ```
 
 Pilot yêu cầu đúng 2 Live DataNodes (slots 1 và 3), 2 NodeManagers RUNNING dưới alias
-`worker1`/`worker3`, endpoint duy nhất/non-loopback, hostname/IP mapping, TCP DataNode 9866,
-capacity > 0, block report, SafeMode OFF và `fsck /` không có block thiếu/hỏng. Pilot chỉ
+`worker1`/`worker3`, endpoint duy nhất/non-loopback, hostname/IP mapping, TCP transfer
+port theo mapping (19866 và 19868), capacity > 0, block report, SafeMode OFF và `fsck /`
+không có block thiếu/hỏng. Pilot chỉ
 đọc trạng thái và không tạo thư mục/đổi quyền HDFS. Nếu SafeMode không tắt hoặc fsck fail,
 dừng rollout; không force SafeMode OFF và không chạy Hive/Spark.
 
@@ -345,8 +371,9 @@ Kiểm tra kết nối mạng từ Windows:
 ```powershell
 $masterIp = Read-Host 'Nhập MASTER_IP (IPv4 Tailscale)'
 $workerIp = Read-Host 'Nhập WORKER1_IP (IPv4 Tailscale)'
+$workerXferPort = 19866
 Test-NetConnection -ComputerName $masterIp -Port 9000
-Test-NetConnection -ComputerName $workerIp -Port 9866
+Test-NetConnection -ComputerName $workerIp -Port $workerXferPort
 Test-NetConnection -ComputerName $workerIp -Port 8041
 ```
 
@@ -369,12 +396,13 @@ tài liệu Docker không xác nhận địa chỉ DataNode mà Hadoop sẽ báo
 Phải xác minh endpoint thực tế trong `hdfs dfsadmin -report`; không suy ra endpoint từ
 `WORKER_IP`, DNS hay dòng log DataNode.
 
-`dfs.datanode.address=0.0.0.0:9866` là địa chỉ bind bên trong container. `dfs.datanode.hostname`
-là hostname mà DataNode báo; hai tùy chọn `dfs.client.use.datanode.hostname` và
-`dfs.datanode.use.datanode.hostname` yêu cầu client/peer phân giải hostname cho luồng dữ liệu,
-nhưng không thay thế việc xác minh địa chỉ `Name` trong HDFS report và luồng dữ liệu thật.
-Compose publish host port 9866 để peer có thể thử kết nối qua địa chỉ host; endpoint báo cáo
-vẫn phải duy nhất, không-loopback.
+Entrypoint đặt `dfs.datanode.address=0.0.0.0:$WORKER_XFER_PORT` bên trong container.
+`dfs.datanode.hostname` là hostname mà DataNode báo; hai tùy chọn
+`dfs.client.use.datanode.hostname` và `dfs.datanode.use.datanode.hostname` yêu cầu client/peer
+phân giải hostname cho luồng dữ liệu, nhưng không thay thế việc xác minh endpoint trong HDFS
+report và luồng dữ liệu thật. Compose publish cùng transfer port trên host Worker và trong
+container. HDFS report có thể hiện cùng IP NAT Docker cho nhiều Worker, nhưng cặp IP/port
+phải duy nhất; client/peer dùng hostname thực tế cùng transfer port để tới host qua mạng đã cấu hình.
 
 Compose bind host ports vào đúng địa chỉ `MASTER_IP`/`WORKER_IP` đã cấu hình. Các địa chỉ này
 phải là IP Tailscale của host nhận port forwarding, không phải IP bridge của container.

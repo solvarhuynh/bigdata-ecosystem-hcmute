@@ -14,6 +14,7 @@ services:
       - MASTER_HOSTNAME=nghia-master
       - MASTER_IP=172.20.0.2
       - WORKER1_IP=172.20.0.3
+      - WORKER1_XFER_PORT=19866
       - WORKER1_HOSTNAME=${WORKER1_HOSTNAME:-local-worker1}
     ports:
       - "9870:9870"   # HDFS NameNode Web UI
@@ -49,9 +50,11 @@ services:
       - NODE_HOSTNAME=${WORKER1_HOSTNAME:-local-worker1}
       - WORKER_LOGICAL_NAME=worker1
       - WORKER_IP=172.20.0.3
+      - WORKER_XFER_PORT=19866
       - MASTER_IP=172.20.0.2
       - MASTER_HOSTNAME=nghia-master
       - WORKER1_IP=172.20.0.3
+      - WORKER1_XFER_PORT=19866
       - WORKER1_HOSTNAME=${WORKER1_HOSTNAME:-local-worker1}
     networks:
       bigdata_lan:

@@ -35,6 +35,16 @@ require_ip() {
     [ "$first_octet" -lt 224 ] || fail "${name} phải là địa chỉ IPv4 unicast."
 }
 
+require_port() {
+    local name="$1"
+    local value="$2"
+    local port
+    require_value "$name" "$value"
+    [[ "$value" =~ ^[1-9][0-9]{0,4}$ ]] || fail "${name} phải là TCP port hợp lệ dạng chuẩn."
+    port="$((10#$value))"
+    [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] || fail "${name} phải nằm trong khoảng 1024-65535."
+}
+
 require_hostname() {
     local name="$1"
     local value="$2"
@@ -117,12 +127,15 @@ wait_for_remote_tcp() {
 find_datanode_registration() {
     local report="$1"
     local expected_hostname="$2"
-    local started_at="$3"
+    local expected_xfer_port="$3"
+    local started_at="$4"
     local registration endpoint hostname last_contact contact_epoch endpoint_host
 
-    registration="$(printf '%s\n' "$report" | awk -v expected="$expected_hostname" '
+    registration="$(printf '%s\n' "$report" | awk -v expected="$expected_hostname" -v expected_port="$expected_xfer_port" '
         function emit_record() {
-            if (in_live && endpoint != "" && hostname == expected && last_contact != "") {
+            endpoint_port = endpoint
+            sub(/^.*:/, "", endpoint_port)
+            if (in_live && endpoint != "" && endpoint_port == expected_port && hostname == expected && last_contact != "") {
                 print endpoint "\t" hostname "\t" last_contact
             }
         }
@@ -165,52 +178,57 @@ if [ "${ENTRYPOINT_TEST_MODE:-}" = "datanode-registration" ]; then
     fresh_contact="$(date -u -d "@${test_started_at}" '+%a %b %d %H:%M:%S UTC %Y')"
     mixed_report="$(cat <<EOF
 Live datanodes (2):
-Name: 100.64.0.11:9866 (worker1/100.64.0.11)
+Name: 172.19.0.1:19866 (worker1/172.19.0.1)
 Hostname: khang-worker
 Last contact: ${fresh_contact}
-Name: 100.64.0.13:9866 (worker3/100.64.0.13)
+Name: 172.19.0.1:19868 (worker3/172.19.0.1)
 Hostname: hongkhoa-worker
 Last contact: ${fresh_contact}
 EOF
 )"
     worker3_only="$(cat <<EOF
 Live datanodes (1):
-Name: 100.64.0.13:9866 (worker3/100.64.0.13)
+Name: 172.19.0.1:19868 (worker3/172.19.0.1)
 Hostname: hongkhoa-worker
 Last contact: ${fresh_contact}
 EOF
 )"
-    worker1_registration="$(find_datanode_registration "$mixed_report" khang-worker "$((test_started_at - 1))")" ||
+    worker1_registration="$(find_datanode_registration "$mixed_report" khang-worker 19866 "$((test_started_at - 1))")" ||
         fail "Fixture test: worker1 record was not selected."
-    [[ "$worker1_registration" == $'100.64.0.11:9866\tkhang-worker\t'* ]] ||
+    [[ "$worker1_registration" == $'172.19.0.1:19866\tkhang-worker\t'* ]] ||
         fail "Fixture test: worker1 matched the wrong DataNode record."
-    worker3_registration="$(find_datanode_registration "$worker3_only" hongkhoa-worker "$((test_started_at - 1))")" ||
+    worker3_registration="$(find_datanode_registration "$worker3_only" hongkhoa-worker 19868 "$((test_started_at - 1))")" ||
         fail "Fixture test: worker3-only record was not selected for its own hostname."
-    [[ "$worker3_registration" == $'100.64.0.13:9866\thongkhoa-worker\t'* ]] ||
+    [[ "$worker3_registration" == $'172.19.0.1:19868\t'* ]] ||
         fail "Fixture test: worker3-only fixture returned the wrong record."
-    if find_datanode_registration "$worker3_only" khang-worker "$((test_started_at - 1))" >/dev/null; then
+    if find_datanode_registration "$worker3_only" khang-worker 19866 "$((test_started_at - 1))" >/dev/null; then
         fail "Fixture test: worker3 record incorrectly satisfied worker1 registration."
     fi
 
+    wrong_port_report="$(printf 'Live datanodes (1):\nName: 172.19.0.1:19867 (worker1/172.19.0.1)\nHostname: khang-worker\nLast contact: %s\n' "$fresh_contact")"
+    if find_datanode_registration "$wrong_port_report" khang-worker 19866 "$((test_started_at - 1))" >/dev/null; then
+        fail "Fixture test: registration with the wrong transfer port was accepted."
+    fi
+
     expect_no_registration() {
-        local report="$1" hostname="$2" started_at="$3" description="$4"
-        if find_datanode_registration "$report" "$hostname" "$started_at" >/dev/null; then
+        local report="$1" hostname="$2" expected_port="$3" started_at="$4" description="$5"
+        if find_datanode_registration "$report" "$hostname" "$expected_port" "$started_at" >/dev/null; then
             fail "Fixture test: accepted ${description}."
         fi
     }
-    for endpoint in 127.0.0.1:9866 0.0.0.0:9866 localhost:9866 ::1:9866 '[::]:9866' '[::1]:9866'; do
+    for endpoint in 127.0.0.1:19866 0.0.0.0:19866 localhost:19866 ::1:19866 '[::]:19866' '[::1]:19866'; do
         endpoint_report="$(printf 'Live datanodes (1):\nName: %s (worker1/127.0.0.1)\nHostname: khang-worker\nLast contact: %s\n' "$endpoint" "$fresh_contact")"
-        expect_no_registration "$endpoint_report" khang-worker "$((test_started_at - 1))" "non-routable endpoint ${endpoint}"
+        expect_no_registration "$endpoint_report" khang-worker 19866 "$((test_started_at - 1))" "non-routable endpoint ${endpoint}"
     done
-    wrong_hostname_report="$(printf 'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nHostname: other-worker\nLast contact: %s\n' "$fresh_contact")"
-    expect_no_registration "$wrong_hostname_report" khang-worker "$((test_started_at - 1))" "a mismatched hostname"
+    wrong_hostname_report="$(printf 'Live datanodes (1):\nName: 172.19.0.1:19866 (worker1/172.19.0.1)\nHostname: other-worker\nLast contact: %s\n' "$fresh_contact")"
+    expect_no_registration "$wrong_hostname_report" khang-worker 19866 "$((test_started_at - 1))" "a mismatched hostname"
     stale_contact="$(date -u -d '@0' '+%a %b %d %H:%M:%S UTC %Y')"
-    stale_report="$(printf 'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nHostname: khang-worker\nLast contact: %s\n' "$stale_contact")"
-    expect_no_registration "$stale_report" khang-worker "$((test_started_at - 1))" "a stale Last contact"
-    expect_no_registration $'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nHostname: khang-worker' khang-worker "$((test_started_at - 1))" "a record missing Last contact"
-    expect_no_registration $'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nLast contact: ' khang-worker "$((test_started_at - 1))" "a record missing hostname"
-    expect_no_registration $'Live datanodes (1):\nName:\nHostname: khang-worker\nLast contact: ' khang-worker "$((test_started_at - 1))" "a record missing endpoint and Last contact"
-    echo "PASS: DataNode fixtures cover matching records, worker3-only filtering, invalid endpoints/hostnames, stale contacts and missing fields."
+    stale_report="$(printf 'Live datanodes (1):\nName: 172.19.0.1:19866 (worker1/172.19.0.1)\nHostname: khang-worker\nLast contact: %s\n' "$stale_contact")"
+    expect_no_registration "$stale_report" khang-worker 19866 "$((test_started_at - 1))" "a stale Last contact"
+    expect_no_registration $'Live datanodes (1):\nName: 172.19.0.1:19866 (worker1/172.19.0.1)\nHostname: khang-worker' khang-worker 19866 "$((test_started_at - 1))" "a record missing Last contact"
+    expect_no_registration $'Live datanodes (1):\nName: 172.19.0.1:19866 (worker1/172.19.0.1)\nLast contact: ' khang-worker 19866 "$((test_started_at - 1))" "a record missing hostname"
+    expect_no_registration $'Live datanodes (1):\nName:\nHostname: khang-worker\nLast contact: ' khang-worker 19866 "$((test_started_at - 1))" "a record missing endpoint and Last contact"
+    echo "PASS: DataNode fixtures verify shared NAT IPs with unique transfer ports, hostname matching, freshness and invalid endpoints."
     exit 0
 fi
 
@@ -236,13 +254,13 @@ prepare_worker_hadoop_conf() {
     local runtime_conf="/tmp/bigdata-hadoop-conf"
     [ -f "${source_conf}/hdfs-site.xml" ] || fail "Thiếu ${source_conf}/hdfs-site.xml."
     mkdir -p "$runtime_conf"
-    if ! python3 - "$source_conf" "$runtime_conf" "$NODE_HOSTNAME" <<'PY'
+    if ! python3 - "$source_conf" "$runtime_conf" "$NODE_HOSTNAME" "$WORKER_XFER_PORT" <<'PY'
 import shutil
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-source, destination, hostname = sys.argv[1:]
+source, destination, hostname, xfer_port = sys.argv[1:]
 shutil.copytree(source, destination, dirs_exist_ok=True)
 xml_path = Path(destination) / "hdfs-site.xml"
 tree = ET.parse(xml_path)
@@ -250,19 +268,22 @@ root = tree.getroot()
 if root.tag != "configuration":
     raise SystemExit("hdfs-site.xml root must be <configuration>")
 
-key = "dfs.datanode.hostname"
-properties = [p for p in root.findall("property") if p.findtext("name", "").strip() == key]
-if len(properties) > 1:
-    raise SystemExit(f"duplicate Hadoop property: {key}")
-if properties:
-    value = properties[0].find("value")
-    if value is None:
-        value = ET.SubElement(properties[0], "value")
-else:
-    prop = ET.SubElement(root, "property")
-    ET.SubElement(prop, "name").text = key
-    value = ET.SubElement(prop, "value")
-value.text = hostname
+for key, configured_value in {
+    "dfs.datanode.hostname": hostname,
+    "dfs.datanode.address": f"0.0.0.0:{xfer_port}",
+}.items():
+    properties = [p for p in root.findall("property") if p.findtext("name", "").strip() == key]
+    if len(properties) > 1:
+        raise SystemExit(f"duplicate Hadoop property: {key}")
+    if properties:
+        value = properties[0].find("value")
+        if value is None:
+            value = ET.SubElement(properties[0], "value")
+    else:
+        prop = ET.SubElement(root, "property")
+        ET.SubElement(prop, "name").text = key
+        value = ET.SubElement(prop, "value")
+    value.text = configured_value
 tree.write(xml_path, encoding="UTF-8", xml_declaration=True)
 PY
     then
@@ -282,7 +303,7 @@ validate_worker_hadoop_conf() {
     client_hostname="$(run_as_hadoop "/opt/hadoop/bin/hdfs getconf -confKey dfs.client.use.datanode.hostname")"
     datanode_hostname_mode="$(run_as_hadoop "/opt/hadoop/bin/hdfs getconf -confKey dfs.datanode.use.datanode.hostname")"
     [ "$datanode_hostname" = "$NODE_HOSTNAME" ] || fail "dfs.datanode.hostname=${datanode_hostname}; mong đợi ${NODE_HOSTNAME}."
-    [ "$datanode_address" = "0.0.0.0:9866" ] || fail "dfs.datanode.address=${datanode_address}; mong đợi 0.0.0.0:9866."
+    [ "$datanode_address" = "0.0.0.0:${WORKER_XFER_PORT}" ] || fail "dfs.datanode.address=${datanode_address}; mong đợi 0.0.0.0:${WORKER_XFER_PORT}."
     [ "$datanode_http" = "0.0.0.0:9864" ] || fail "dfs.datanode.http.address=${datanode_http}; mong đợi 0.0.0.0:9864."
     [ "$datanode_ipc" = "0.0.0.0:9867" ] || fail "dfs.datanode.ipc.address=${datanode_ipc}; mong đợi 0.0.0.0:9867."
     [ "$client_hostname" = "true" ] || fail "dfs.client.use.datanode.hostname phải là true."
@@ -295,16 +316,16 @@ wait_for_datanode_registration() {
     local attempt report registration endpoint
     for attempt in $(seq 1 24); do
         report="$(run_as_hadoop "/opt/hadoop/bin/hdfs dfsadmin -report" 2>&1)" || report=""
-        if registration="$(find_datanode_registration "$report" "$NODE_HOSTNAME" "$started_at")"; then
+        if registration="$(find_datanode_registration "$report" "$NODE_HOSTNAME" "$WORKER_XFER_PORT" "$started_at")"; then
             endpoint="${registration%%$'\t'*}"
             echo "DataNode registered: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, endpoint=${endpoint}"
             return 0
         fi
         sleep 5
     done
-    echo "ERROR: NameNode chưa xác nhận registration mới cho đúng hostname=${NODE_HOSTNAME} với endpoint không-loopback/wildcard sau 120 giây." >&2
-    echo "Không yêu cầu endpoint Name bằng WORKER_IP; xác minh endpoint thực tế, hostname mapping và khả năng truy cập riêng." >&2
-    echo "Kiểm tra endpoint có duy nhất trong HDFS report và hostname DataNode có phân giải tới WORKER_IP từ các node hay không." >&2
+    echo "ERROR: NameNode chưa xác nhận registration mới cho hostname=${NODE_HOSTNAME} và transfer port=${WORKER_XFER_PORT} sau 120 giây." >&2
+    echo "Trong Docker Desktop, IP endpoint có thể là IP NAT dùng chung; hostname phải phân giải tới WORKER_IP và transfer port phải duy nhất." >&2
+    echo "Kiểm tra endpoint ${NODE_HOSTNAME}:${WORKER_XFER_PORT} có truy cập được qua host port đã publish hay không." >&2
     echo "--- HDFS report ---" >&2
     printf '%s\n' "$report" >&2
     echo "--- DataNode process ---" >&2
@@ -364,10 +385,13 @@ fi
 for slot in $worker_slots; do
     ip_var="WORKER${slot}_IP"
     hostname_var="WORKER${slot}_HOSTNAME"
+    port_var="WORKER${slot}_XFER_PORT"
     ip_value="${!ip_var:-}"
     hostname_value="${!hostname_var:-}"
+    port_value="${!port_var:-}"
     require_ip "$ip_var" "$ip_value"
     require_hostname "$hostname_var" "$hostname_value"
+    require_port "$port_var" "$port_value"
 done
 
 for slot in $worker_slots; do
@@ -390,9 +414,12 @@ for slot in $worker_slots; do
         [ "$other_slot" -gt "$slot" ] || continue
         other_ip_var="WORKER${other_slot}_IP"
         other_hostname_var="WORKER${other_slot}_HOSTNAME"
+        port_var="WORKER${slot}_XFER_PORT"
+        other_port_var="WORKER${other_slot}_XFER_PORT"
         other_hostname_value="${!other_hostname_var}"
         [ "${!ip_var}" != "${!other_ip_var}" ] || fail "${ip_var} và ${other_ip_var} bị trùng."
         [ "$hostname_lower" != "${other_hostname_value,,}" ] || fail "${hostname_var} và ${other_hostname_var} bị trùng."
+        [ "${!port_var}" != "${!other_port_var}" ] || fail "${port_var} và ${other_port_var} phải khác nhau để DataNode endpoint luôn duy nhất."
     done
 done
 
@@ -400,14 +427,16 @@ if [ "$NODE_ROLE" = "worker" ]; then
     require_value WORKER_LOGICAL_NAME "${WORKER_LOGICAL_NAME:-}"
     require_ip WORKER_IP "${WORKER_IP:-}"
     case "$WORKER_LOGICAL_NAME" in
-        worker1) expected_ip="$WORKER1_IP"; expected_hostname="$WORKER1_HOSTNAME" ;;
-        worker2) expected_ip="$WORKER2_IP"; expected_hostname="$WORKER2_HOSTNAME" ;;
-        worker3) expected_ip="$WORKER3_IP"; expected_hostname="$WORKER3_HOSTNAME" ;;
-        worker4) expected_ip="$WORKER4_IP"; expected_hostname="$WORKER4_HOSTNAME" ;;
+        worker1) expected_ip="$WORKER1_IP"; expected_hostname="$WORKER1_HOSTNAME"; expected_xfer_port="$WORKER1_XFER_PORT" ;;
+        worker2) expected_ip="$WORKER2_IP"; expected_hostname="$WORKER2_HOSTNAME"; expected_xfer_port="$WORKER2_XFER_PORT" ;;
+        worker3) expected_ip="$WORKER3_IP"; expected_hostname="$WORKER3_HOSTNAME"; expected_xfer_port="$WORKER3_XFER_PORT" ;;
+        worker4) expected_ip="$WORKER4_IP"; expected_hostname="$WORKER4_HOSTNAME"; expected_xfer_port="$WORKER4_XFER_PORT" ;;
         *) fail "WORKER_LOGICAL_NAME phải là worker1, worker2, worker3 hoặc worker4." ;;
     esac
     [ "$WORKER_IP" = "$expected_ip" ] || fail "WORKER_IP không khớp IP của ${WORKER_LOGICAL_NAME}."
     [ "$NODE_HOSTNAME" = "$expected_hostname" ] || fail "NODE_HOSTNAME không khớp hostname của ${WORKER_LOGICAL_NAME}."
+    require_port WORKER_XFER_PORT "${WORKER_XFER_PORT:-}"
+    [ "$WORKER_XFER_PORT" = "$expected_xfer_port" ] || fail "WORKER_XFER_PORT không khớp cổng đã gán cho ${WORKER_LOGICAL_NAME}."
 fi
 
 echo "=========================================================="
@@ -493,7 +522,7 @@ if [ "$NODE_ROLE" = "master" ]; then
     fi
 else
     echo ">>> Đang khởi động WORKER NODE (${WORKER_LOGICAL_NAME}) <<<"
-    echo "Worker mapping: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, ip=${WORKER_IP}"
+    echo "Worker mapping: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, ip=${WORKER_IP}, xferPort=${WORKER_XFER_PORT}"
     wait_for_remote_tcp nghia-master 9000 NameNode-RPC
     echo "Khởi động DataNode..."
     datanode_started_at="$(date -u +%s)"

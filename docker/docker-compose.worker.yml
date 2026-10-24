@@ -1,5 +1,5 @@
 # Worker dùng bridge; chỉ publish host ports trên IP Tailscale khai báo trong .env.
-# Mỗi máy đặt NODE_HOSTNAME, WORKER_LOGICAL_NAME và WORKER_IP riêng.
+# Mỗi máy đặt NODE_HOSTNAME, WORKER_LOGICAL_NAME, WORKER_IP và WORKER_XFER_PORT riêng.
 services:
   worker:
     image: bigdata-cluster:1.0
@@ -15,7 +15,7 @@ services:
       # Spark executor BlockManager range (7079 plus 16 retries).
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:7079-7095:7079-7095"
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9864:9864"
-      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9866:9866"
+      - "${WORKER_IP:?Set_WORKER_IP}:${WORKER_XFER_PORT:?Set_WORKER_XFER_PORT}:${WORKER_XFER_PORT:?Set_WORKER_XFER_PORT}"
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9867:9867"
     environment:
       NODE_ROLE: worker
@@ -23,12 +23,17 @@ services:
       NODE_HOSTNAME: "${NODE_HOSTNAME:?Set NODE_HOSTNAME to this machine's actual hostname}"
       WORKER_LOGICAL_NAME: "${WORKER_LOGICAL_NAME:?Set WORKER_LOGICAL_NAME to worker1, worker2, worker3 or worker4}"
       WORKER_IP: "${WORKER_IP:?Set WORKER_IP to this worker's reachable IPv4 address}"
+      WORKER_XFER_PORT: "${WORKER_XFER_PORT:?Set WORKER_XFER_PORT to the port assigned to this logical worker}"
       MASTER_IP: "${MASTER_IP:?Set MASTER_IP to the Master's reachable IPv4 address}"
       MASTER_HOSTNAME: "${MASTER_HOSTNAME:-nghia-master}"
       WORKER1_IP: "${WORKER1_IP:?Set WORKER1_IP in the cluster mapping}"
       WORKER2_IP: "${WORKER2_IP:?Set WORKER2_IP in the cluster mapping}"
       WORKER3_IP: "${WORKER3_IP:?Set WORKER3_IP in the cluster mapping}"
       WORKER4_IP: "${WORKER4_IP:?Set WORKER4_IP in the cluster mapping}"
+      WORKER1_XFER_PORT: "${WORKER1_XFER_PORT:?Set WORKER1_XFER_PORT in the cluster mapping}"
+      WORKER2_XFER_PORT: "${WORKER2_XFER_PORT:?Set WORKER2_XFER_PORT in the cluster mapping}"
+      WORKER3_XFER_PORT: "${WORKER3_XFER_PORT:?Set WORKER3_XFER_PORT in the cluster mapping}"
+      WORKER4_XFER_PORT: "${WORKER4_XFER_PORT:?Set WORKER4_XFER_PORT in the cluster mapping}"
       WORKER1_HOSTNAME: "${WORKER1_HOSTNAME:?Set WORKER1_HOSTNAME in the cluster mapping}"
       WORKER2_HOSTNAME: "${WORKER2_HOSTNAME:?Set WORKER2_HOSTNAME in the cluster mapping}"
       WORKER3_HOSTNAME: "${WORKER3_HOSTNAME:?Set WORKER3_HOSTNAME in the cluster mapping}"

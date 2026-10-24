@@ -107,12 +107,12 @@ if [ "$target" = "--self-test" ]; then
 
     datanode_fixture="$(cat <<'EOF'
 Live datanodes (2):
-Name: 100.64.0.11:9866 (worker1/100.64.0.11)
+Name: 172.19.0.1:19866 (worker1/172.19.0.1)
 Hostname: An-worker
 Configured Capacity: 1,073,741,824 (1 GB)
 Last contact: Wed Oct 21 10:00:00 UTC 2026
 Last Block Report: Wed Oct 21 09:59:00 UTC 2026
-Name: 100.64.0.13:9866 (worker3/100.64.0.13)
+Name: 172.19.0.1:19868 (worker3/172.19.0.1)
 Hostname: Binh-slave
 Configured Capacity: 2,147,483,648 (2 GB)
 Last contact: Wed Oct 21 10:00:01 UTC 2026
@@ -122,11 +122,11 @@ EOF
     datanode_rows="$(parse_live_datanodes "$datanode_fixture")"
     worker1_record="$(awk -F '\t' '$2 == "An-worker" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' <<< "$datanode_rows")"
     worker3_record="$(awk -F '\t' '$2 == "Binh-slave" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' <<< "$datanode_rows")"
-    [[ "$worker1_record" == $'100.64.0.11:9866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tWed Oct 21 09:59:00 UTC 2026' ]] || {
+    [[ "$worker1_record" == $'172.19.0.1:19866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tWed Oct 21 09:59:00 UTC 2026' ]] || {
         echo "FAIL: endpoint, hostname, Last contact, capacity or block report crossed DataNode records." >&2
         exit 1
     }
-    [[ "$worker3_record" == $'100.64.0.13:9866\tBinh-slave\tWed Oct 21 10:00:01 UTC 2026\t2147483648\tWed Oct 21 09:59:01 UTC 2026' ]] || {
+    [[ "$worker3_record" == $'172.19.0.1:19868\tBinh-slave\tWed Oct 21 10:00:01 UTC 2026\t2147483648\tWed Oct 21 09:59:01 UTC 2026' ]] || {
         echo "FAIL: worker3 fixture fields were not kept in one DataNode record." >&2
         exit 1
     }
@@ -134,14 +134,19 @@ EOF
         echo "FAIL: complete DataNode fixture was reported unhealthy." >&2
         exit 1
     }
+    unique_fixture_endpoints="$(printf '%s\n' "$datanode_rows" | awk -F '\t' 'NF == 5 { endpoints[$1] = 1 } END { for (endpoint in endpoints) count++; print count+0 }')"
+    [ "$unique_fixture_endpoints" -eq 2 ] || {
+        echo "FAIL: DataNodes sharing a NAT source IP were not distinguished by transfer port." >&2
+        exit 1
+    }
     for invalid_record in \
         $'-\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
-        $'100.64.0.11:9866\t-\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
-        $'100.64.0.11:9866\tAn-worker\t-\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
-        $'100.64.0.11:9866\tAn-worker\tNever\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
-        $'100.64.0.11:9866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t0\tWed Oct 21 09:59:00 UTC 2026' \
-        $'100.64.0.11:9866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tNever' \
-        $'100.64.0.11:9866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\t'; do
+        $'172.19.0.1:19866\t-\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
+        $'172.19.0.1:19866\tAn-worker\t-\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
+        $'172.19.0.1:19866\tAn-worker\tNever\t1073741824\tWed Oct 21 09:59:00 UTC 2026' \
+        $'172.19.0.1:19866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t0\tWed Oct 21 09:59:00 UTC 2026' \
+        $'172.19.0.1:19866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tNever' \
+        $'172.19.0.1:19866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\t'; do
         [ -n "$(datanode_state_issues "$invalid_record")" ] || {
             echo "FAIL: incomplete or invalid DataNode record was accepted: ${invalid_record//$'\t'/|}" >&2
             exit 1
@@ -277,27 +282,34 @@ expected_worker_mappings="$(docker exec nghia-master /bin/bash -c '
     for slot in "$@"; do
         hostname_var="WORKER${slot}_HOSTNAME"
         ip_var="WORKER${slot}_IP"
-        printf "%s\t%s\tworker%s\n" "${!hostname_var:-}" "${!ip_var:-}" "$slot"
+        port_var="WORKER${slot}_XFER_PORT"
+        printf "%s\t%s\tworker%s\t%s\n" "${!hostname_var:-}" "${!ip_var:-}" "$slot" "${!port_var:-}"
     done
 ' -- "${expected_slots[@]}" 2>/dev/null || true)"
-configured_worker_count="$(printf '%s\n' "$expected_worker_mappings" | awk -F '\t' 'NF == 3 && $1 != "" && $2 != "" { count++ } END { print count+0 }')"
+configured_worker_count="$(printf '%s\n' "$expected_worker_mappings" | awk -F '\t' 'NF == 4 && $1 != "" && $2 != "" && $4 ~ /^[0-9]+$/ { count++ } END { print count+0 }')"
 reported_worker_hostnames="$(printf '%s\n' "$datanode_rows" | awk -F '\t' 'NF == 5 && $2 != "-" { print $2 }' | sort -u)"
 missing_worker_hostnames=""
+bad_worker_endpoints=""
 bad_hostname_resolutions=""
 unreachable_datanodes=""
 missing_nodemanager_aliases=""
 
-while IFS=$'\t' read -r expected_hostname expected_ip expected_alias; do
+while IFS=$'\t' read -r expected_hostname expected_ip expected_alias expected_xfer_port; do
     [ -n "$expected_hostname" ] || continue
     if ! printf '%s\n' "$reported_worker_hostnames" | grep -Fxq "$expected_hostname"; then
         missing_worker_hostnames="${missing_worker_hostnames} ${expected_hostname}"
+    fi
+    worker_endpoint="$(printf '%s\n' "$datanode_rows" | awk -F '\t' -v hostname="$expected_hostname" '$2 == hostname { print $1 }')"
+    worker_endpoint_count="$(printf '%s\n' "$datanode_rows" | awk -F '\t' -v hostname="$expected_hostname" '$2 == hostname { count++ } END { print count+0 }')"
+    if [ "$worker_endpoint_count" -ne 1 ] || [ "${worker_endpoint##*:}" != "$expected_xfer_port" ]; then
+        bad_worker_endpoints="${bad_worker_endpoints} ${expected_hostname}=${worker_endpoint:-missing} (expected transfer port ${expected_xfer_port:-missing})"
     fi
     resolved_ip="$(docker exec nghia-master getent ahostsv4 "$expected_hostname" 2>/dev/null | awk 'NR == 1 { print $1; exit }' || true)"
     if ! hostname_maps_to_expected_ip "$resolved_ip" "$expected_ip"; then
         bad_hostname_resolutions="${bad_hostname_resolutions} ${expected_hostname}=${resolved_ip:-unresolved} (expected ${expected_ip})"
     fi
-    if ! docker exec nghia-master timeout 3 bash -c ": </dev/tcp/${expected_ip}/9866" >/dev/null 2>&1; then
-        unreachable_datanodes="${unreachable_datanodes} ${expected_hostname}:${expected_ip}:9866"
+    if ! docker exec nghia-master timeout 3 bash -c ": </dev/tcp/${expected_ip}/${expected_xfer_port}" >/dev/null 2>&1; then
+        unreachable_datanodes="${unreachable_datanodes} ${expected_hostname}:${expected_ip}:${expected_xfer_port}"
     fi
     if ! yarn_alias_is_running "$running_aliases" "$expected_alias"; then
         missing_nodemanager_aliases="${missing_nodemanager_aliases} ${expected_alias}"
@@ -309,6 +321,7 @@ echo "Expected workers: ${expected} (slots: ${expected_slots[*]}; YARN aliases: 
 echo "Live DataNodes: ${live_datanodes}"
 echo "Unique DataNode endpoints: ${unique_endpoints}"
 echo "Unique DataNode hostnames: ${unique_hostnames}"
+echo "Expected DataNode transfer ports: $(printf '%s\n' "$expected_worker_mappings" | awk -F '\t' 'NF == 4 { print $3 "=" $4 }' | paste -sd ', ' -)"
 echo "Configured worker mappings: ${configured_worker_count}"
 echo "DataNodes with contact/capacity/block-report issues: $(printf '%s\n' "$bad_datanode_state" | awk 'NF { count++ } END { print count+0 }')"
 echo "Running NodeManagers (logical aliases): ${running_nodemanagers}"
@@ -321,6 +334,7 @@ if [ "$live_datanodes" -ne "$expected" ] ||
    [ -n "$bad_endpoints" ] ||
    [ -n "$bad_datanode_state" ] ||
    [ -n "$missing_worker_hostnames" ] ||
+   [ -n "$bad_worker_endpoints" ] ||
    [ -n "$bad_hostname_resolutions" ] ||
    [ -n "$unreachable_datanodes" ] ||
    [ -n "$missing_nodemanager_aliases" ]; then
@@ -328,6 +342,7 @@ if [ "$live_datanodes" -ne "$expected" ] ||
     [ -z "$bad_endpoints" ] || echo "Loopback/wildcard DataNode endpoints:${bad_endpoints}" >&2
     [ -z "$bad_datanode_state" ] || { echo "DataNode capacity/block-report issue:" >&2; printf '%s\n' "$bad_datanode_state" >&2; }
     [ -z "$missing_worker_hostnames" ] || echo "Thiếu hostname DataNode đã cấu hình:${missing_worker_hostnames}" >&2
+    [ -z "$bad_worker_endpoints" ] || echo "DataNode transfer port không khớp worker mapping:${bad_worker_endpoints}" >&2
     [ -z "$bad_hostname_resolutions" ] || echo "Hostname không phân giải tới IP cấu hình:${bad_hostname_resolutions}" >&2
     [ -z "$unreachable_datanodes" ] || echo "Không truy cập được DataNode transfer port:${unreachable_datanodes}" >&2
     [ -z "$missing_nodemanager_aliases" ] || echo "Thiếu NodeManager RUNNING cho alias:${missing_nodemanager_aliases}" >&2
