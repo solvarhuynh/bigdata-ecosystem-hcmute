@@ -12,6 +12,8 @@ services:
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:8041:8041"
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:8042:8042"
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:13562:13562"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:41000-41099:41000-41099/tcp"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:41100-41149:41100-41149/tcp"
       # Spark executor BlockManager range (7079 plus 16 retries).
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:7079-7095:7079-7095"
       - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9864:9864"
@@ -43,6 +45,7 @@ services:
       - ../data:/opt/data
       - ../config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
       - ../config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro
+      - ../config/hadoop/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml:ro
       - worker_datanode:/opt/hadoop/hdfs/datanode
     restart: unless-stopped
 

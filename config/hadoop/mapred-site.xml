@@ -12,4 +12,14 @@
         <name>mapreduce.application.classpath</name>
         <value>$HADOOP_HOME/share/hadoop/mapreduce/*:$HADOOP_HOME/share/hadoop/mapreduce/lib/*:$HADOOP_HOME/share/hadoop/common/*:$HADOOP_HOME/share/hadoop/common/lib/*:$HADOOP_HOME/share/hadoop/yarn/*:$HADOOP_HOME/share/hadoop/yarn/lib/*:$HADOOP_HOME/share/hadoop/hdfs/*:$HADOOP_HOME/share/hadoop/hdfs/lib/*</value>
     </property>
+
+    <property>
+        <name>yarn.app.mapreduce.am.job.client.port-range</name>
+        <value>41000-41099</value>
+    </property>
+
+    <property>
+        <name>yarn.app.mapreduce.am.webapp.port-range</name>
+        <value>41100-41149</value>
+    </property>
 </configuration>
