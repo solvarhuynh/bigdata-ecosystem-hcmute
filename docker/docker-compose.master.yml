@@ -1,27 +1,42 @@
-# Compose cho máy Nghĩa (nghia-master) khi chạy liên máy qua mạng LAN/Tailscale
+# Master dùng bridge; chỉ publish host ports trên IP Tailscale khai báo trong .env.
 services:
   master:
     image: bigdata-cluster:1.0
     container_name: nghia-master
     hostname: nghia-master
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
-    network_mode: host
+    ports:
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:22:22"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:8030:8030"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:8031:8031"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:8032:8032"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:8033:8033"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:8088:8088"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:9000:9000"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:9870:9870"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:9083:9083"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:10000:10000"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:10002:10002"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:7078:7078"
+      - "${MASTER_IP:?Set MASTER_IP to the Master's Tailscale IPv4}:7079-7095:7079-7095"
     environment:
       - NODE_ROLE=master
       - NODE_HOSTNAME=nghia-master
       - CLUSTER_SIZE=4
+      - MASTER_START_PHASE=${MASTER_START_PHASE:-core}
       - MASTER_HOSTNAME=${MASTER_HOSTNAME:-nghia-master}
-      - MASTER_IP=${MASTER_IP}
-      - WORKER1_IP=${WORKER1_IP}
-      - WORKER2_IP=${WORKER2_IP}
-      - WORKER3_IP=${WORKER3_IP}
-      - WORKER4_IP=${WORKER4_IP}
-      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME}
-      - WORKER2_HOSTNAME=${WORKER2_HOSTNAME}
-      - WORKER3_HOSTNAME=${WORKER3_HOSTNAME}
-      - WORKER4_HOSTNAME=${WORKER4_HOSTNAME}
+      - MASTER_IP=${MASTER_IP:?Set MASTER_IP to the Master's reachable IPv4 address}
+      - WORKER1_IP=${WORKER1_IP:?Set WORKER1_IP in the cluster mapping}
+      - WORKER2_IP=${WORKER2_IP:?Set WORKER2_IP in the cluster mapping}
+      - WORKER3_IP=${WORKER3_IP:?Set WORKER3_IP in the cluster mapping}
+      - WORKER4_IP=${WORKER4_IP:?Set WORKER4_IP in the cluster mapping}
+      - WORKER1_HOSTNAME=${WORKER1_HOSTNAME:?Set WORKER1_HOSTNAME in the cluster mapping}
+      - WORKER2_HOSTNAME=${WORKER2_HOSTNAME:?Set WORKER2_HOSTNAME in the cluster mapping}
+      - WORKER3_HOSTNAME=${WORKER3_HOSTNAME:?Set WORKER3_HOSTNAME in the cluster mapping}
+      - WORKER4_HOSTNAME=${WORKER4_HOSTNAME:?Set WORKER4_HOSTNAME in the cluster mapping}
     volumes:
       - ../docker/entrypoint.sh:/entrypoint.sh:ro
+      - ../scripts/start_hive_services.sh:/start_hive_services.sh:ro
       - ../data:/opt/data
       - ../pyspark:/opt/pyspark
       - ../hive:/opt/hive-scripts

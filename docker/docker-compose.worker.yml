@@ -1,12 +1,22 @@
-# Compose mẫu dùng trên từng máy Worker chạy liên máy qua mạng LAN/Tailscale.
+# Worker dùng bridge; chỉ publish host ports trên IP Tailscale khai báo trong .env.
 # Mỗi máy đặt NODE_HOSTNAME, WORKER_LOGICAL_NAME và WORKER_IP riêng.
 services:
   worker:
     image: bigdata-cluster:1.0
-    container_name: "bigdata-${WORKER_LOGICAL_NAME:?Set WORKER_LOGICAL_NAME to worker1, worker2, worker3 or worker4}"
+    container_name: "${NODE_HOSTNAME:?Set NODE_HOSTNAME to this machine's actual hostname}"
     hostname: "${NODE_HOSTNAME:?Set NODE_HOSTNAME to this machine's actual hostname}"
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
-    network_mode: host
+    ports:
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:22:22"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:8040:8040"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:8041:8041"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:8042:8042"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:13562:13562"
+      # Spark executor BlockManager range (7079 plus 16 retries).
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:7079-7095:7079-7095"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9864:9864"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9866:9866"
+      - "${WORKER_IP:?Set WORKER_IP to this host's Tailscale IPv4}:9867:9867"
     environment:
       NODE_ROLE: worker
       CLUSTER_SIZE: "4"

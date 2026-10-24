@@ -114,6 +114,106 @@ wait_for_remote_tcp() {
     return 1
 }
 
+find_datanode_registration() {
+    local report="$1"
+    local expected_hostname="$2"
+    local started_at="$3"
+    local registration endpoint hostname last_contact contact_epoch endpoint_host
+
+    registration="$(printf '%s\n' "$report" | awk -v expected="$expected_hostname" '
+        function emit_record() {
+            if (in_live && endpoint != "" && hostname == expected && last_contact != "") {
+                print endpoint "\t" hostname "\t" last_contact
+            }
+        }
+        /^Live datanodes/ { in_live = 1; next }
+        /^(Dead|Decommissioning|Decommissioned|In maintenance) datanodes/ { emit_record(); in_live = 0; next }
+        /^Name:/ {
+            emit_record()
+            endpoint = $2
+            hostname = ""
+            last_contact = ""
+            next
+        }
+        /^Hostname:/ { hostname = $2; next }
+        /^Last contact:/ {
+            last_contact = $0
+            sub(/^Last contact:[[:space:]]*/, "", last_contact)
+        }
+        END { emit_record() }
+    ')"
+    [ -n "$registration" ] || return 1
+    while IFS=$'\t' read -r endpoint hostname last_contact; do
+        contact_epoch="$(date -u -d "$last_contact" +%s 2>/dev/null || echo 0)"
+        [ "$contact_epoch" -ge "$started_at" ] || continue
+
+        endpoint_host="${endpoint%:*}"
+        if [[ "$endpoint_host" =~ ^127\. ]] ||
+           [[ "${endpoint_host,,}" == localhost || "${endpoint_host,,}" == localhost.* ]] ||
+           [[ "$endpoint_host" == "0.0.0.0" || "$endpoint_host" == "::" || "$endpoint_host" == "[::]" || "$endpoint_host" == "::1" || "$endpoint_host" == "[::1]" ]]; then
+            continue
+        fi
+
+        printf '%s\t%s\t%s\n' "$endpoint" "$hostname" "$last_contact"
+        return 0
+    done <<< "$registration"
+    return 1
+}
+
+if [ "${ENTRYPOINT_TEST_MODE:-}" = "datanode-registration" ]; then
+    test_started_at="$(date -u +%s)"
+    fresh_contact="$(date -u -d "@${test_started_at}" '+%a %b %d %H:%M:%S UTC %Y')"
+    mixed_report="$(cat <<EOF
+Live datanodes (2):
+Name: 100.64.0.11:9866 (worker1/100.64.0.11)
+Hostname: khang-worker
+Last contact: ${fresh_contact}
+Name: 100.64.0.13:9866 (worker3/100.64.0.13)
+Hostname: hongkhoa-worker
+Last contact: ${fresh_contact}
+EOF
+)"
+    worker3_only="$(cat <<EOF
+Live datanodes (1):
+Name: 100.64.0.13:9866 (worker3/100.64.0.13)
+Hostname: hongkhoa-worker
+Last contact: ${fresh_contact}
+EOF
+)"
+    worker1_registration="$(find_datanode_registration "$mixed_report" khang-worker "$((test_started_at - 1))")" ||
+        fail "Fixture test: worker1 record was not selected."
+    [[ "$worker1_registration" == $'100.64.0.11:9866\tkhang-worker\t'* ]] ||
+        fail "Fixture test: worker1 matched the wrong DataNode record."
+    worker3_registration="$(find_datanode_registration "$worker3_only" hongkhoa-worker "$((test_started_at - 1))")" ||
+        fail "Fixture test: worker3-only record was not selected for its own hostname."
+    [[ "$worker3_registration" == $'100.64.0.13:9866\thongkhoa-worker\t'* ]] ||
+        fail "Fixture test: worker3-only fixture returned the wrong record."
+    if find_datanode_registration "$worker3_only" khang-worker "$((test_started_at - 1))" >/dev/null; then
+        fail "Fixture test: worker3 record incorrectly satisfied worker1 registration."
+    fi
+
+    expect_no_registration() {
+        local report="$1" hostname="$2" started_at="$3" description="$4"
+        if find_datanode_registration "$report" "$hostname" "$started_at" >/dev/null; then
+            fail "Fixture test: accepted ${description}."
+        fi
+    }
+    for endpoint in 127.0.0.1:9866 0.0.0.0:9866 localhost:9866 ::1:9866 '[::]:9866' '[::1]:9866'; do
+        endpoint_report="$(printf 'Live datanodes (1):\nName: %s (worker1/127.0.0.1)\nHostname: khang-worker\nLast contact: %s\n' "$endpoint" "$fresh_contact")"
+        expect_no_registration "$endpoint_report" khang-worker "$((test_started_at - 1))" "non-routable endpoint ${endpoint}"
+    done
+    wrong_hostname_report="$(printf 'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nHostname: other-worker\nLast contact: %s\n' "$fresh_contact")"
+    expect_no_registration "$wrong_hostname_report" khang-worker "$((test_started_at - 1))" "a mismatched hostname"
+    stale_contact="$(date -u -d '@0' '+%a %b %d %H:%M:%S UTC %Y')"
+    stale_report="$(printf 'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nHostname: khang-worker\nLast contact: %s\n' "$stale_contact")"
+    expect_no_registration "$stale_report" khang-worker "$((test_started_at - 1))" "a stale Last contact"
+    expect_no_registration $'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nHostname: khang-worker' khang-worker "$((test_started_at - 1))" "a record missing Last contact"
+    expect_no_registration $'Live datanodes (1):\nName: 100.64.0.11:9866 (worker1/100.64.0.11)\nLast contact: ' khang-worker "$((test_started_at - 1))" "a record missing hostname"
+    expect_no_registration $'Live datanodes (1):\nName:\nHostname: khang-worker\nLast contact: ' khang-worker "$((test_started_at - 1))" "a record missing endpoint and Last contact"
+    echo "PASS: DataNode fixtures cover matching records, worker3-only filtering, invalid endpoints/hostnames, stale contacts and missing fields."
+    exit 0
+fi
+
 wait_for_jps() {
     local process_name="$1"
     local attempt
@@ -192,35 +292,19 @@ validate_worker_hadoop_conf() {
 
 wait_for_datanode_registration() {
     local started_at="$1"
-    local attempt report registration endpoint last_contact contact_epoch endpoint_host
+    local attempt report registration endpoint
     for attempt in $(seq 1 24); do
         report="$(run_as_hadoop "/opt/hadoop/bin/hdfs dfsadmin -report" 2>&1)" || report=""
-        registration="$(printf '%s\n' "$report" | awk -v expected="$NODE_HOSTNAME" '
-            /^Name:/ { address = $2 }
-            /^Hostname:/ { hostname = $2 }
-            /^Last contact:/ && hostname == expected {
-                contact = $0
-                sub(/^Last contact:[[:space:]]*/, "", contact)
-                print address "\t" contact
-                exit
-            }
-        ')"
-        endpoint="${registration%%$'\t'*}"
-        last_contact="${registration#*$'\t'}"
-        contact_epoch="$(date -u -d "$last_contact" +%s 2>/dev/null || echo 0)"
-        if [ -n "$endpoint" ]; then
-            endpoint_host="${endpoint%:*}"
-            case "$endpoint_host" in
-                127.*|localhost|0.0.0.0|::1|\[::1\]) ;;
-                *) if [ "$endpoint_host" = "$WORKER_IP" ] && [ "$contact_epoch" -ge "$started_at" ]; then
-                    echo "DataNode registered: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, endpoint=${endpoint}"
-                    return 0
-                fi ;;
-            esac
+        if registration="$(find_datanode_registration "$report" "$NODE_HOSTNAME" "$started_at")"; then
+            endpoint="${registration%%$'\t'*}"
+            echo "DataNode registered: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, endpoint=${endpoint}"
+            return 0
         fi
         sleep 5
     done
-    echo "ERROR: NameNode chưa xác nhận đăng ký mới cho hostname=${NODE_HOSTNAME}, endpoint=${WORKER_IP}:9866 sau 120 giây." >&2
+    echo "ERROR: NameNode chưa xác nhận registration mới cho đúng hostname=${NODE_HOSTNAME} với endpoint không-loopback/wildcard sau 120 giây." >&2
+    echo "Không yêu cầu endpoint Name bằng WORKER_IP; xác minh endpoint thực tế, hostname mapping và khả năng truy cập riêng." >&2
+    echo "Kiểm tra endpoint có duy nhất trong HDFS report và hostname DataNode có phân giải tới WORKER_IP từ các node hay không." >&2
     echo "--- HDFS report ---" >&2
     printf '%s\n' "$report" >&2
     echo "--- DataNode process ---" >&2
@@ -236,8 +320,8 @@ wait_for_nodemanager_registration() {
     local attempt nodes
     for attempt in $(seq 1 24); do
         nodes="$(run_as_hadoop "/opt/hadoop/bin/yarn node -list -all" 2>&1)" || nodes=""
-        if printf '%s\n' "$nodes" | awk -v host="$NODE_HOSTNAME" '$0 ~ /RUNNING/ && index($0, host) { found = 1 } END { exit !found }'; then
-            echo "NodeManager registered: hostname=${NODE_HOSTNAME}"
+        if printf '%s\n' "$nodes" | awk -v alias="$WORKER_LOGICAL_NAME" '$2 == "RUNNING" { node = $1; sub(/:[0-9]+$/, "", node); if (node == alias) found = 1 } END { exit !found }'; then
+            echo "NodeManager registered: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}"
             return 0
         fi
         sleep 5
@@ -250,6 +334,7 @@ wait_for_nodemanager_registration() {
 NODE_ROLE="${NODE_ROLE:-}"
 NODE_HOSTNAME="${NODE_HOSTNAME:-}"
 CLUSTER_SIZE="${CLUSTER_SIZE:-4}"
+MASTER_START_PHASE="${MASTER_START_PHASE:-core}"
 require_value NODE_ROLE "$NODE_ROLE"
 require_hostname NODE_HOSTNAME "$NODE_HOSTNAME"
 case "$NODE_ROLE" in
@@ -260,6 +345,12 @@ case "$CLUSTER_SIZE" in
     1|4) ;;
     *) fail "CLUSTER_SIZE phải là 1 hoặc 4, nhận được: ${CLUSTER_SIZE}" ;;
 esac
+if [ "$NODE_ROLE" = "master" ]; then
+    case "$MASTER_START_PHASE" in
+        core|full) ;;
+        *) fail "MASTER_START_PHASE phải là core hoặc full, nhận được: ${MASTER_START_PHASE}" ;;
+    esac
+fi
 
 require_ip MASTER_IP "${MASTER_IP:-}"
 require_hostname MASTER_HOSTNAME "${MASTER_HOSTNAME:-}"
@@ -327,16 +418,21 @@ echo "User: hadoopnghia / root"
 echo "=========================================================="
 
 # Mỗi alias được kiểm tra riêng để không ghi thêm dòng khi container restart.
-add_host_entry "$MASTER_IP" nghia-master
-add_host_entry "$MASTER_IP" "$MASTER_HOSTNAME"
+if [ "$NODE_ROLE" = "master" ]; then
+    master_resolution="127.0.0.1"
+else
+    master_resolution="$MASTER_IP"
+fi
+add_host_entry "$master_resolution" nghia-master
+add_host_entry "$master_resolution" "$MASTER_HOSTNAME"
 for slot in $worker_slots; do
     ip_var="WORKER${slot}_IP"
     hostname_var="WORKER${slot}_HOSTNAME"
     add_host_entry "${!ip_var}" "worker${slot}"
     add_host_entry "${!ip_var}" "${!hostname_var}"
 done
-assert_host_resolution nghia-master "$MASTER_IP"
-assert_host_resolution "$MASTER_HOSTNAME" "$MASTER_IP"
+assert_host_resolution nghia-master "$master_resolution"
+assert_host_resolution "$MASTER_HOSTNAME" "$master_resolution"
 for slot in $worker_slots; do
     ip_var="WORKER${slot}_IP"
     hostname_var="WORKER${slot}_HOSTNAME"
@@ -377,45 +473,24 @@ if [ "$NODE_ROLE" = "master" ]; then
     echo "Khởi động NameNode..."
     run_as_hadoop "/opt/hadoop/bin/hdfs --daemon start namenode"
     wait_for_tcp 9000 NameNode
+    wait_for_tcp 9870 NameNode-Web
 
     echo "Khởi động ResourceManager..."
     run_as_hadoop "/opt/hadoop/bin/yarn --daemon start resourcemanager"
     wait_for_tcp 8032 ResourceManager
+    wait_for_tcp 8088 ResourceManager-Web
 
-    if run_as_hadoop "/opt/hadoop/bin/hdfs dfsadmin -safemode get" | grep -q 'Safe mode is OFF'; then
-        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /tmp/hive /user/hive/warehouse /test_bigdata/input /test_bigdata/hive_sales"
-        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -chmod 1777 /tmp"
-        run_as_hadoop "/opt/hadoop/bin/hdfs dfs -chmod 777 /tmp/hive /user/hive/warehouse /test_bigdata /test_bigdata/input /test_bigdata/hive_sales"
+    if [ "$MASTER_START_PHASE" = "full" ]; then
+        echo "Master phase=full: chờ HDFS health gate rồi mới khởi động Hive."
+        if bash /start_hive_services.sh; then
+            echo "Master full services đã sẵn sàng: NameNode, ResourceManager, Metastore và HiveServer2 JDBC."
+        else
+            echo "ERROR: Hive chưa sẵn sàng; NameNode và ResourceManager vẫn tiếp tục chạy. Xem log và chạy lại /start_hive_services.sh sau health gate."
+        fi
     else
-        echo "DataNode chưa đủ để thoát SafeMode; tạo thư mục HDFS sẽ do check_cluster.sh thực hiện sau."
+        echo "Master core services đã sẵn sàng: NameNode và ResourceManager."
+        echo "Hive chưa được khởi động; sau check_cluster.sh pilot, chạy: docker exec nghia-master bash /start_hive_services.sh"
     fi
-
-    hive_db_dir="/opt/hive/metastore_db"
-    hive_derby_db_dir="$hive_db_dir/metastore_db"
-    hive_log_dir="/opt/hive/logs"
-
-    mkdir -p "$hive_db_dir" "$hive_log_dir"
-    chown -R hadoopnghia:hadoopnghia "$hive_db_dir" "$hive_log_dir"
-
-    run_as_hadoop "test -w '$hive_db_dir' -a -w '$hive_log_dir'"
-
-    if [ -f "$hive_derby_db_dir/service.properties" ]; then
-        echo "Hive Metastore schema đã tồn tại, bỏ qua khởi tạo."
-    elif [ -e "$hive_derby_db_dir" ]; then
-        fail "Thư mục Hive Derby đã tồn tại nhưng thiếu service.properties; dừng để tránh ghi đè dữ liệu."
-    else
-        echo "Khởi tạo Hive Metastore schema Derby lần đầu..."
-        run_as_hadoop "/opt/hive/bin/schematool -dbType derby -initSchema"
-    fi
-
-    echo "Khởi động Hive Metastore..."
-    run_as_hadoop "nohup /opt/hive/bin/hive --service metastore > '$hive_log_dir/metastore.log' 2>&1 </dev/null &"
-    wait_for_tcp 9083 Hive-Metastore
-
-    echo "Khởi động HiveServer2..."
-    run_as_hadoop "nohup /opt/hive/bin/hiveserver2 > '$hive_log_dir/hiveserver2.log' 2>&1 </dev/null &"
-    echo "Master core services đã sẵn sàng: NameNode, ResourceManager và Hive Metastore đang lắng nghe."
-    echo "HiveServer2 được khởi chạy; kiểm tra JDBC sau khi HDFS thoát SafeMode bằng scripts/check_cluster.sh."
 else
     echo ">>> Đang khởi động WORKER NODE (${WORKER_LOGICAL_NAME}) <<<"
     echo "Worker mapping: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, ip=${WORKER_IP}"

@@ -10,6 +10,7 @@ services:
       - NODE_ROLE=master
       - NODE_HOSTNAME=nghia-master
       - CLUSTER_SIZE=1
+      - MASTER_START_PHASE=full
       - MASTER_HOSTNAME=nghia-master
       - MASTER_IP=172.20.0.2
       - WORKER1_IP=172.20.0.3
@@ -28,6 +29,7 @@ services:
         ipv4_address: 172.20.0.2
     volumes:
       - ../docker/entrypoint.sh:/entrypoint.sh:ro
+      - ../scripts/start_hive_services.sh:/start_hive_services.sh:ro
       - ../data:/opt/data
       - ../config/hadoop/hdfs-site.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml:ro
       - ../config/hadoop/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml:ro

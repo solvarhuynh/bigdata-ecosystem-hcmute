@@ -3,7 +3,7 @@ set -e
 set -o pipefail
 
 compose_file="docker/docker-compose.local.yml"
-timeout_seconds=360
+timeout_seconds=900
 
 print_node_failure() {
     local label="$1"
@@ -22,7 +22,7 @@ print_node_failure() {
 master_services_ready() {
     docker exec "$1" bash -lc '
         set -e
-        for port in 9000 8032 9083; do
+        for port in 9000 8032 9870 8088 9083 10000; do
             timeout 1 bash -c ": </dev/tcp/127.0.0.1/$port" >/dev/null 2>&1
         done
         jps_output="$(su hadoopnghia -s /bin/bash -c "jps")"
@@ -60,13 +60,22 @@ for attempt in $(seq 1 "$timeout_seconds"); do
     worker_state="$(docker inspect -f '{{.State.Status}}' "$worker_id" 2>/dev/null || true)"
 
     case "$master_state" in
-        exited|dead|restarting)
+        exited|dead|restarting|paused)
             print_node_failure "Master" "nghia-master" "$master_id"
             exit 1
             ;;
     esac
     case "$worker_state" in
-        exited|dead|restarting)
+        exited|dead|restarting|paused)
+            print_node_failure "Worker logic worker1" "worker1" "$worker_id"
+            exit 1
+            ;;
+        created)
+            ;;
+        running)
+            ;;
+        *)
+            print_node_failure "Master" "nghia-master" "$master_id"
             print_node_failure "Worker logic worker1" "worker1" "$worker_id"
             exit 1
             ;;
@@ -74,7 +83,7 @@ for attempt in $(seq 1 "$timeout_seconds"); do
 
     if [ "$master_state" = "running" ] && [ "$worker_state" = "running" ]; then
         if master_services_ready "$master_id"; then
-            echo "PASS: Master core và Worker container đang running; NameNode, ResourceManager và Metastore đang lắng nghe."
+            echo "PASS: Master và Worker container đang running; NameNode, ResourceManager, Metastore và HiveServer2 đang lắng nghe."
             echo "HiveServer2 JDBC cùng DataNode/NodeManager chưa được xác nhận ở bước này."
             echo "Bước kiểm tra HDFS, YARN và Hive sau khi Worker đăng ký: bash scripts/check_cluster.sh local"
             docker compose -f "$compose_file" ps
