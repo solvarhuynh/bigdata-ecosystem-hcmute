@@ -2,14 +2,22 @@
 set -euo pipefail
 
 safemode_timeout_seconds=180
-fsck_timeout_seconds=180
 service_timeout_seconds=180
 hive_log_dir="/opt/hive/logs"
 
 fail() {
     echo "ERROR: $*" >&2
     echo "--- Hive logs ---" >&2
-    tail -n 80 "$hive_log_dir/metastore.log" "$hive_log_dir/hiveserver2.log" 2>/dev/null || true
+    for log_file in "$hive_log_dir/metastore.log" "$hive_log_dir/hiveserver2.log"; do
+        if [ -f "$log_file" ]; then
+            echo "--- ${log_file} (last 25 lines) ---" >&2
+            if ! tail -n 25 -- "$log_file"; then
+                echo "Không đọc được ${log_file}." >&2
+            fi
+        else
+            echo "Chưa có log: ${log_file}" >&2
+        fi
+    done
     exit 1
 }
 
@@ -136,24 +144,35 @@ fi
 if ! safe_mode="$(hadoop_exec "timeout ${safemode_timeout_seconds}s /opt/hadoop/bin/hdfs dfsadmin -safemode wait" 2>&1)"; then
     echo "FAIL: SafeMode chưa tắt sau ${safemode_timeout_seconds}s." >&2
     echo "--- SafeMode ---" >&2
-    hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -safemode get' 2>&1 || true
+    if safe_mode_status="$(hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -safemode get' 2>&1)"; then
+        printf '%s\n' "$safe_mode_status" >&2
+    else
+        printf '%s\n' "$safe_mode_status" | tail -n 25 >&2
+        echo "Không truy vấn được SafeMode hiện tại." >&2
+    fi
     echo "--- HDFS report ---" >&2
-    hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -report' 2>&1 || true
-    echo "--- Read-only fsck diagnostic (60s max) ---" >&2
-    hadoop_exec 'timeout 60s /opt/hadoop/bin/hdfs fsck / -files -blocks -locations' 2>&1 || true
+    if hdfs_report="$(hadoop_exec '/opt/hadoop/bin/hdfs dfsadmin -report' 2>&1)"; then
+        printf '%s\n' "$hdfs_report" | tail -n 25 >&2
+    else
+        printf '%s\n' "$hdfs_report" | tail -n 25 >&2
+        echo "Không lấy được HDFS report." >&2
+    fi
     fail "Không khởi động Hive khi HDFS còn trong SafeMode."
 fi
-printf '%s\n' "$safe_mode"
+echo "HDFS readiness: NameNode reachable; SafeMode OFF."
 
-if ! fsck_report="$(hadoop_exec "timeout ${fsck_timeout_seconds}s /opt/hadoop/bin/hdfs fsck / -files -blocks -locations" 2>&1)"; then
-    printf '%s\n' "$fsck_report" >&2
-    fail "HDFS fsck thất bại hoặc timeout; Hive chưa được khởi động."
-fi
-if printf '%s\n' "$fsck_report" | grep -Eiq 'Status:[[:space:]]*CORRUPT|MISSING BLOCKS:?[[:space:]]*[1-9][0-9]*|CORRUPT BLOCKS:?[[:space:]]*[1-9][0-9]*'; then
-    printf '%s\n' "$fsck_report" | grep -Ei 'Status:|MISSING BLOCKS|CORRUPT BLOCKS|Total blocks:|Total files:' >&2 || true
-    fail "fsck phát hiện block thiếu/hỏng; Hive chưa được khởi động."
-fi
-printf '%s\n' "$fsck_report" | grep -Ei 'Status:|MISSING BLOCKS|CORRUPT BLOCKS|Total blocks:|Total files:' || true
+for required_path in /tmp /tmp/hive /user/hive/warehouse; do
+    if ! hadoop_exec "/opt/hadoop/bin/hdfs dfs -test -d '${required_path}'" >/dev/null 2>&1; then
+        echo "FAIL: Hive HDFS path is missing or inaccessible: ${required_path}." >&2
+        if path_detail="$(hadoop_exec "/opt/hadoop/bin/hdfs dfs -ls -d '${required_path}'" 2>&1)"; then
+            printf '%s\n' "$path_detail" >&2
+        else
+            printf '%s\n' "$path_detail" | tail -n 25 >&2
+        fi
+        fail "HDFS path validation failed; no HDFS directory or permission changes were made."
+    fi
+done
+echo "HDFS paths ready: /tmp, /tmp/hive, /user/hive/warehouse."
 
 if ! metastore_state="$(classify_metastore_state "$hive_derby_db_dir" "$hive_db_dir")"; then
     fail "Không thể kiểm tra nội dung metastore mount; dừng để bảo toàn metadata."
@@ -161,13 +180,6 @@ fi
 if [ "$metastore_state" = invalid ]; then
     fail "Metastore mount không rỗng nhưng không có Derby service.properties nhận dạng được; dừng, không chạy schema init."
 fi
-
-# Create the expected working directories only after the read-only health gate passes.
-hadoop_exec '/opt/hadoop/bin/hdfs dfs -mkdir -p /tmp /tmp/hive /user/hive/warehouse /nhom14/input/word /nhom14/input/hive_sales' ||
-    fail "Không tạo được thư mục HDFS cần thiết cho Hive."
-hadoop_exec '/opt/hadoop/bin/hdfs dfs -chmod 1777 /tmp' || fail "Không đặt được quyền HDFS cho /tmp."
-hadoop_exec '/opt/hadoop/bin/hdfs dfs -chmod 777 /tmp/hive /user/hive/warehouse /nhom14 /nhom14/input /nhom14/input/word /nhom14/input/hive_sales' ||
-    fail "Không đặt được quyền HDFS cho thư mục Hive/bài thực hành."
 
 mkdir -p "$hive_log_dir"
 chown hadoopnghia:hadoopnghia "$hive_log_dir"
@@ -199,10 +211,12 @@ start_service "Hive Metastore" 9083 '[o]rg.apache.hadoop.hive.metastore.HiveMeta
     '/opt/hive/bin/hive --service metastore' "$hive_log_dir/metastore.log"
 start_service "HiveServer2" 10000 '[o]rg.apache.hive.service.server.HiveServer2' \
     '/opt/hive/bin/hiveserver2' "$hive_log_dir/hiveserver2.log"
+wait_for_port 10002 "HiveServer2 Web UI"
 
 if ! jdbc_output="$(hadoop_exec "timeout 60s /opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/default -e 'SHOW DATABASES;'" 2>&1)"; then
-    printf '%s\n' "$jdbc_output" >&2
+    printf '%s\n' "$jdbc_output" | tail -n 40 >&2
     fail "HiveServer2 không hoàn tất JDBC SHOW DATABASES trong 60s."
 fi
-printf '%s\n' "$jdbc_output"
-echo "PASS: Hive Metastore and HiveServer2 are listening; JDBC SHOW DATABASES succeeded."
+echo "Hive Metastore ready: port 9083."
+echo "HiveServer2 ready: ports 10000 and 10002."
+echo "JDBC readiness: SHOW DATABASES succeeded."
