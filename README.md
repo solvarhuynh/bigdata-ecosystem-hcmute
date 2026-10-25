@@ -40,10 +40,11 @@ dùng hostname `An-worker`, còn Hadoop vẫn kết nối tới bí danh `worker
 - Với triển khai nhiều máy: các máy phải truy cập được địa chỉ của nhau, phân giải được
   hostname DataNode và bí danh logic, đồng thời cho phép đúng các cổng cần thiết.
 - Cổng Master: 22, 7078-7095, 8030-8033, 8088, 9000, 9870, 9083, 10000 và 10002.
-- Cổng Worker: 22, 7079-7095 (Spark BlockManager), 8040-8042, 9864, 9867, 13562 và
-  cổng DataNode transfer riêng theo Worker (mặc định 19866-19869). Compose publish
-  các cổng này riêng lên `WORKER_IP`; giới hạn Windows Defender
-  Firewall chỉ cho các peer tin cậy và không mở ra Internet công cộng.
+- Cổng Worker: 22, 7079-7095 (Spark BlockManager), 8040-8042, 9864, 9867, 13562,
+  41000-41099 (MapReduce AM client RPC), 41100-41149 (MapReduce AM web UI) và cổng
+  DataNode transfer riêng theo Worker (mặc định 19866-19869). Compose publish các cổng
+  này riêng lên `WORKER_IP`; giới hạn Windows Defender Firewall theo peer cần thiết và
+  không mở chúng ra Internet công cộng.
 
 ## Cấu hình môi trường
 
@@ -111,11 +112,26 @@ Khi khởi động Worker, entrypoint sao chép cấu hình Hadoop vào
 `dfs.datanode.address=0.0.0.0:$WORKER_XFER_PORT`, rồi kiểm tra cấu hình hiệu lực trước
 khi chạy daemon. `dfs.datanode.address` là địa chỉ bind trong container, không phải
 địa chỉ có thể truy cập từ LAN/Tailscale.
-Alias `workerN` và hostname thực tế cùng được ánh xạ tới IP cấu hình. Worker chỉ báo
-đăng ký thành công khi NameNode nhìn thấy hostname đó qua endpoint mới, không-loopback;
-script cũng chờ NodeManager đăng ký với ResourceManager. Endpoint `Name` trong HDFS report
-không bị giả định phải bằng `WORKER_IP`; cần kiểm tra endpoint thực tế, hostname mapping và
-khả năng truy cập riêng.
+Trên Master và các Worker khác, bí danh `workerN` cùng hostname thực tế được ánh xạ tới
+`WORKERn_IP`. Bên trong mỗi Worker, entrypoint lấy IPv4 hiện có của container từ
+`hostname -I` và chỉ ánh xạ bí danh logic của chính node đó tới địa chỉ bridge này. Nhờ vậy,
+Spark YARN Executor dùng được địa chỉ thuộc network namespace của container để bind, trong khi
+Master và Worker khác vẫn phân giải hostname quảng bá `workerN` tới IP host đã cấu hình.
+Hostname DataNode thực tế phân giải tới `WORKERn_IP` trên các node còn lại; nếu hostname thực tế
+trùng bí danh logic, tên đó phân giải tới bridge IP bên trong chính Worker và tới `WORKERn_IP`
+ở các node khác.
+
+Runtime Hadoop config của Worker giữ NodeManager identity ổn định bằng cách đặt
+`yarn.nodemanager.hostname` và `yarn.nodemanager.address` theo bí danh logic, đồng thời bind
+RPC tới `0.0.0.0`; Web UI NodeManager cũng quảng bá bí danh logic. Worker chỉ báo đăng ký thành
+công khi NameNode thấy hostname DataNode qua endpoint mới, không-loopback, và ResourceManager
+thấy NodeManager dưới đúng bí danh. Endpoint `Name` trong HDFS report không bị giả định phải
+bằng `WORKER_IP`; cần kiểm tra endpoint thực tế, hostname mapping và khả năng truy cập riêng.
+
+Sau khi rollout một Worker, đối chiếu phân giải ngay trên Worker và Master. Trên Worker, bí danh
+của chính nó phải trả về IPv4 trong `hostname -I`, và reverse lookup của IPv4 đó phải trả
+`workerN` làm tên đầu tiên; trên Master, cùng bí danh phải trả về `WORKERn_IP`. `yarn node
+-list -all` trên Master phải tiếp tục hiển thị NodeManager dưới `workerN`.
 
 Với Hadoop 3.4.0, NameNode thay IP trong đăng ký bằng địa chỉ nguồn của kết nối RPC. Trên
 Docker Desktop các Worker có thể cùng xuất hiện với IP NAT của Docker; Hadoop cũng loại

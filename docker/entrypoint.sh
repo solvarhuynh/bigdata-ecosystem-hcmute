@@ -88,6 +88,15 @@ assert_host_resolution() {
         fail "Tên ${alias} phân giải thành '${actual_ip:-không phân giải}', mong đợi ${expected_ip}."
 }
 
+assert_reverse_hostname() {
+    local ip="$1"
+    local expected_hostname="$2"
+    local actual_hostname
+    actual_hostname="$(getent hosts "$ip" | awk 'NR == 1 { print $2; exit }')"
+    [ "${actual_hostname,,}" = "${expected_hostname,,}" ] ||
+        fail "IP ${ip} reverse-resolve thành '${actual_hostname:-không phân giải}', mong đợi ${expected_hostname}."
+}
+
 run_as_hadoop() {
     su hadoopnghia -s /bin/bash -c "export HADOOP_CONF_DIR='${HADOOP_CONF_DIR}'; $1"
 }
@@ -254,37 +263,45 @@ prepare_worker_hadoop_conf() {
     local runtime_conf="/tmp/bigdata-hadoop-conf"
     [ -f "${source_conf}/hdfs-site.xml" ] || fail "Thiếu ${source_conf}/hdfs-site.xml."
     mkdir -p "$runtime_conf"
-    if ! python3 - "$source_conf" "$runtime_conf" "$NODE_HOSTNAME" "$WORKER_XFER_PORT" <<'PY'
+    if ! python3 - "$source_conf" "$runtime_conf" "$NODE_HOSTNAME" "$WORKER_LOGICAL_NAME" "$WORKER_XFER_PORT" <<'PY'
 import shutil
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-source, destination, hostname, xfer_port = sys.argv[1:]
+source, destination, hostname, logical_name, xfer_port = sys.argv[1:]
 shutil.copytree(source, destination, dirs_exist_ok=True)
-xml_path = Path(destination) / "hdfs-site.xml"
-tree = ET.parse(xml_path)
-root = tree.getroot()
-if root.tag != "configuration":
-    raise SystemExit("hdfs-site.xml root must be <configuration>")
 
-for key, configured_value in {
+def set_properties(xml_path, updates):
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    if root.tag != "configuration":
+        raise SystemExit(f"{xml_path.name} root must be <configuration>")
+    for key, configured_value in updates.items():
+        properties = [p for p in root.findall("property") if p.findtext("name", "").strip() == key]
+        if len(properties) > 1:
+            raise SystemExit(f"duplicate Hadoop property: {key}")
+        if properties:
+            value = properties[0].find("value")
+            if value is None:
+                value = ET.SubElement(properties[0], "value")
+        else:
+            prop = ET.SubElement(root, "property")
+            ET.SubElement(prop, "name").text = key
+            value = ET.SubElement(prop, "value")
+        value.text = configured_value
+    tree.write(xml_path, encoding="UTF-8", xml_declaration=True)
+
+set_properties(Path(destination) / "hdfs-site.xml", {
     "dfs.datanode.hostname": hostname,
     "dfs.datanode.address": f"0.0.0.0:{xfer_port}",
-}.items():
-    properties = [p for p in root.findall("property") if p.findtext("name", "").strip() == key]
-    if len(properties) > 1:
-        raise SystemExit(f"duplicate Hadoop property: {key}")
-    if properties:
-        value = properties[0].find("value")
-        if value is None:
-            value = ET.SubElement(properties[0], "value")
-    else:
-        prop = ET.SubElement(root, "property")
-        ET.SubElement(prop, "name").text = key
-        value = ET.SubElement(prop, "value")
-    value.text = configured_value
-tree.write(xml_path, encoding="UTF-8", xml_declaration=True)
+})
+set_properties(Path(destination) / "yarn-site.xml", {
+    "yarn.nodemanager.hostname": logical_name,
+    "yarn.nodemanager.address": f"{logical_name}:8041",
+    "yarn.nodemanager.bind-host": "0.0.0.0",
+    "yarn.nodemanager.webapp.address": f"{logical_name}:8042",
+})
 PY
     then
         fail "Không thể tạo Hadoop runtime config cho ${NODE_HOSTNAME}."
@@ -451,23 +468,44 @@ if [ "$NODE_ROLE" = "master" ]; then
     master_resolution="127.0.0.1"
 else
     master_resolution="$MASTER_IP"
+    worker_container_ip="$(hostname -I | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print $i; exit } }')"
+    require_ip WORKER_CONTAINER_IP "$worker_container_ip"
 fi
 add_host_entry "$master_resolution" nghia-master
 add_host_entry "$master_resolution" "$MASTER_HOSTNAME"
 for slot in $worker_slots; do
     ip_var="WORKER${slot}_IP"
     hostname_var="WORKER${slot}_HOSTNAME"
-    add_host_entry "${!ip_var}" "worker${slot}"
-    add_host_entry "${!ip_var}" "${!hostname_var}"
+    alias="worker${slot}"
+    alias_ip="${!ip_var}"
+    hostname_ip="${!ip_var}"
+    if [ "$NODE_ROLE" = "worker" ] && [ "$WORKER_LOGICAL_NAME" = "$alias" ]; then
+        alias_ip="$worker_container_ip"
+        if [ "${!hostname_var,,}" = "$alias" ]; then hostname_ip="$worker_container_ip"; fi
+    fi
+    add_host_entry "$alias_ip" "$alias"
+    if [ "${!hostname_var,,}" != "$alias" ]; then
+        add_host_entry "$hostname_ip" "${!hostname_var}"
+    fi
 done
 assert_host_resolution nghia-master "$master_resolution"
 assert_host_resolution "$MASTER_HOSTNAME" "$master_resolution"
 for slot in $worker_slots; do
     ip_var="WORKER${slot}_IP"
     hostname_var="WORKER${slot}_HOSTNAME"
-    assert_host_resolution "worker${slot}" "${!ip_var}"
-    assert_host_resolution "${!hostname_var}" "${!ip_var}"
+    alias="worker${slot}"
+    alias_ip="${!ip_var}"
+    hostname_ip="${!ip_var}"
+    if [ "$NODE_ROLE" = "worker" ] && [ "$WORKER_LOGICAL_NAME" = "$alias" ]; then
+        alias_ip="$worker_container_ip"
+        if [ "${!hostname_var,,}" = "$alias" ]; then hostname_ip="$worker_container_ip"; fi
+    fi
+    assert_host_resolution "$alias" "$alias_ip"
+    assert_host_resolution "${!hostname_var}" "$hostname_ip"
 done
+if [ "$NODE_ROLE" = "worker" ]; then
+    assert_reverse_hostname "$worker_container_ip" "$WORKER_LOGICAL_NAME"
+fi
 
 if [ "$NODE_ROLE" = "worker" ]; then
     prepare_worker_hadoop_conf
@@ -522,7 +560,7 @@ if [ "$NODE_ROLE" = "master" ]; then
     fi
 else
     echo ">>> Đang khởi động WORKER NODE (${WORKER_LOGICAL_NAME}) <<<"
-    echo "Worker mapping: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, ip=${WORKER_IP}, xferPort=${WORKER_XFER_PORT}"
+    echo "Worker mapping: logical=${WORKER_LOGICAL_NAME}, hostname=${NODE_HOSTNAME}, hostIP=${WORKER_IP}, containerIP=${worker_container_ip}, xferPort=${WORKER_XFER_PORT}"
     wait_for_remote_tcp nghia-master 9000 NameNode-RPC
     echo "Khởi động DataNode..."
     datanode_started_at="$(date -u +%s)"
