@@ -230,14 +230,14 @@ Nếu NameNode chưa có metadata, không format khi chưa xác nhận volume m�
 trình khởi tạo riêng `bash scripts/init_namenode.sh master` chỉ sau khi kiểm tra volume và
 thư mục đích. Entry point không format NameNode.
 
-### 2. Worker 1 — Khang, rồi Worker 3 — Hồng Khoa
+### 2. Worker 1 — Khang, rồi Worker 2 — Trần Khoa
 
 Mỗi máy dùng `.env` riêng. Với Khang, đặt `NODE_HOSTNAME=khang-worker`,
-`WORKER_LOGICAL_NAME=worker1`, `WORKER_IP` bằng `WORKER1_IP`; với Hồng Khoa đặt
-`NODE_HOSTNAME=hongkhoa-worker`, `WORKER_LOGICAL_NAME=worker3`, `WORKER_IP` bằng
-`WORKER3_IP`. Đặt lần lượt `WORKER_XFER_PORT=19866` và `WORKER_XFER_PORT=19868`;
-các worker còn lại dùng 19867 và 19869. Hostname thực tế do nhóm chọn; bí danh Hadoop
-giữ nguyên `worker1`/`worker3` và không đổi `config/hadoop/workers`.
+`WORKER_LOGICAL_NAME=worker1`, `WORKER_IP` bằng `WORKER1_IP`; với Trần Khoa đặt
+`NODE_HOSTNAME=trankhoa-worker`, `WORKER_LOGICAL_NAME=worker2`, `WORKER_IP` bằng
+`WORKER2_IP`. Đặt lần lượt `WORKER_XFER_PORT=19866` và `WORKER_XFER_PORT=19867`;
+các Worker còn lại dùng 19868 và 19869. Hostname thực tế có thể do nhóm chọn; bí danh Hadoop
+giữ nguyên `worker1`/`worker2` và không đổi `config/hadoop/workers`.
 
 Trên từng Worker, trước mỗi recreate, xác nhận container hiện tại đang mount đúng DataNode
 volume tại `/opt/hadoop/hdfs/datanode`. So sánh tên volume thực tế với Compose project/volume
@@ -260,7 +260,7 @@ docker logs khang-worker --tail 120
 ```
 
 Chờ log xác nhận DataNode registration cho hostname `khang-worker` và NodeManager alias
-`worker1`. Chỉ sau đó chuyển sang máy Hồng Khoa; kiểm tra volume của node đó riêng rồi mới
+`worker1`. Chỉ sau đó chuyển sang máy Trần Khoa; kiểm tra volume của node đó riêng rồi mới
 recreate:
 
 ```powershell
@@ -268,15 +268,15 @@ $composeJson = docker compose --env-file .env -f docker/docker-compose.worker.ym
 if ($LASTEXITCODE -ne 0) { throw 'Không render được Worker Compose; dừng rollout.' }
 $composeConfig = ConvertFrom-Json -InputObject ($composeJson -join [Environment]::NewLine)
 $expectedDnVolume = $composeConfig.volumes.worker_datanode.name
-$dnVolume = docker inspect hongkhoa-worker --format '{{range .Mounts}}{{if eq .Destination "/opt/hadoop/hdfs/datanode"}}{{.Name}}{{end}}{{end}}'
+$dnVolume = docker inspect trankhoa-worker --format '{{range .Mounts}}{{if eq .Destination "/opt/hadoop/hdfs/datanode"}}{{.Name}}{{end}}{{end}}'
 if ($LASTEXITCODE -ne 0 -or -not $dnVolume) { throw 'Không tìm thấy container hoặc DataNode volume mount hiện tại; dừng rollout.' }
 if (-not $expectedDnVolume -or $dnVolume -ne $expectedDnVolume) { throw "Container đang mount '$dnVolume' nhưng Compose sẽ dùng '$expectedDnVolume'; dừng để xác minh volume/project." }
 docker volume inspect $expectedDnVolume
 docker compose --env-file .env -f docker/docker-compose.worker.yml up -d --force-recreate worker
-docker logs hongkhoa-worker --tail 120
+docker logs trankhoa-worker --tail 120
 ```
 
-Chờ NodeManager alias `worker3` và DataNode `hongkhoa-worker` được xác nhận; không chạy hai
+Chờ NodeManager alias `worker2` và DataNode `trankhoa-worker` được xác nhận; không chạy hai
 recreate đồng thời.
 
 Từ Master, sau khi cả hai Worker đã khởi động, chạy pilot:
@@ -285,9 +285,9 @@ Từ Master, sau khi cả hai Worker đã khởi động, chạy pilot:
 bash scripts/check_cluster.sh pilot
 ```
 
-Pilot yêu cầu đúng 2 Live DataNodes (slots 1 và 3), 2 NodeManagers RUNNING dưới alias
-`worker1`/`worker3`, endpoint duy nhất/non-loopback, hostname/IP mapping, TCP transfer
-port theo mapping (19866 và 19868), capacity > 0, block report, SafeMode OFF và `fsck /`
+Pilot yêu cầu đúng 2 Live DataNodes (slots 1 và 2), 2 NodeManagers RUNNING dưới alias
+`worker1`/`worker2`, endpoint duy nhất/non-loopback, hostname/IP mapping, TCP transfer
+port theo mapping (19866 và 19867), capacity > 0, block report, SafeMode OFF và `fsck /`
 không có block thiếu/hỏng. Pilot chỉ
 đọc trạng thái và không tạo thư mục/đổi quyền HDFS. Nếu SafeMode không tắt hoặc fsck fail,
 dừng rollout; không force SafeMode OFF và không chạy Hive/Spark.
@@ -402,7 +402,7 @@ docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hadoop/bin/yarn no
 ```
 
 `getent` chỉ xác nhận mapping trong container. `scripts/check_cluster.sh pilot` kiểm tra
-worker1/worker3 trước Hive; `full` dành cho cả bốn Worker và Hive JDBC.
+worker1/worker2 trước Hive; `full` dành cho cả bốn Worker và Hive JDBC.
 Không có kết quả runtime nào xác nhận Tailscale/Docker Desktop trong lần rà soát này.
 
 Compose triển khai hiện dùng bridge network và publish các host port của Master/Worker.
@@ -587,15 +587,14 @@ if ($csvFsckExit -ne 0 -or $csvFsckText -match '(?im)Status:\s*CORRUPT|MISSING B
 Chỉ tiếp tục nếu CSV tồn tại, `fsck` không báo missing/corrupt block và Hive helper đã xác nhận
 JDBC. Sau đó chạy DDL, xác nhận đúng 8 cột, rồi thực hiện query có timeout và giới hạn kết quả:
 
-`hive/01_create_warehouse.sql` định nghĩa đúng tám cột `invoice`, `stockcode`, `description`,
-`quantity`, `invoicedate`, `price`, `customer_id`, `country` và dùng LOCATION
-`/nhom14/input/hive_sales`. Script có `DROP TABLE IF EXISTS sales_warehouse` nhưng tạo
-`online_retail` bằng `IF NOT EXISTS`; nó không thay thế schema của một bảng `online_retail`
-đã tồn tại. Kiểm tra metadata trước; nếu bảng hiện có khác tám cột dự kiến, dừng và xử lý
-metadata riêng biệt thay vì xóa bảng hay dữ liệu trong bước này.
+`hive/01_create_warehouse.sql` tạo bảng trong `bigdata_n14_db`, định nghĩa tám cột `invoice`,
+`stockcode`, `description`, `quantity`, `invoicedate`, `price`, `customer_id`, `country` và
+dùng LOCATION `/nhom14/input/hive_sales`. Bảng được tạo với `IF NOT EXISTS`; script không
+xóa hoặc thay thế bảng đã có. Kiểm tra metadata trước; nếu bảng hiện có khác tám cột dự kiến,
+dừng và xử lý metadata riêng biệt.
 
 ```powershell
-docker exec nghia-master su hadoopnghia -s /bin/bash -c 'timeout 120s /opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/default -f /opt/hive-scripts/01_create_warehouse.sql'
+docker exec nghia-master su hadoopnghia -s /bin/bash -c 'timeout 120s /opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/bigdata_n14_db -f /opt/hive-scripts/01_create_warehouse.sql'
 docker exec nghia-master su hadoopnghia -s /bin/bash -c "timeout 60s /opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/bigdata_n14_db -e 'DESCRIBE online_retail;'"
 docker exec nghia-master su hadoopnghia -s /bin/bash -c "timeout 120s /opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/bigdata_n14_db -e 'SELECT invoice, stockcode, description, quantity, invoicedate, price, customer_id, country FROM online_retail LIMIT 5; SELECT country, COUNT(*) AS sales_rows FROM online_retail GROUP BY country ORDER BY sales_rows DESC LIMIT 5;'"
 docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hive/bin/beeline -u jdbc:hive2://nghia-master:10000/bigdata_n14_db -e 'SET hive.execution.engine;'"

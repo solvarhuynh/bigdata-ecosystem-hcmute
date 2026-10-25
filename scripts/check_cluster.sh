@@ -10,7 +10,7 @@ fsck_diagnostic_timeout_seconds=60
 load_expected_slots() {
     case "$1" in
         local) expected_slots=(1); hive_required=true ;;
-        pilot) expected_slots=(1 3); hive_required=false ;;
+        pilot) expected_slots=(1 2); hive_required=false ;;
         full) expected_slots=(1 2 3 4); hive_required=true ;;
         *) return 1 ;;
     esac
@@ -87,7 +87,7 @@ datanode_state_issues() {
 if [ "$target" = "--self-test" ]; then
     expected_slots=()
     load_expected_slots local && [ "${expected_slots[*]}:${expected}" = "1:1" ] || exit 1
-    load_expected_slots pilot && [ "${expected_slots[*]}:${expected}" = "1 3:2" ] || exit 1
+    load_expected_slots pilot && [ "${expected_slots[*]}:${expected}" = "1 2:2" ] || exit 1
     load_expected_slots full && [ "${expected_slots[*]}:${expected}" = "1 2 3 4:4" ] || exit 1
     for damaged_fsck in 'Status: CORRUPT' 'MISSING BLOCKS: 1' 'MISSING BLOCKS 2' 'CORRUPT BLOCKS: 3'; do
         fsck_has_damage "$damaged_fsck" || { echo "FAIL: fsck damage was not detected: ${damaged_fsck}" >&2; exit 1; }
@@ -112,8 +112,8 @@ Hostname: An-worker
 Configured Capacity: 1,073,741,824 (1 GB)
 Last contact: Wed Oct 21 10:00:00 UTC 2026
 Last Block Report: Wed Oct 21 09:59:00 UTC 2026
-Name: 172.19.0.1:19868 (worker3/172.19.0.1)
-Hostname: Binh-slave
+Name: 172.19.0.1:19867 (worker2/172.19.0.1)
+Hostname: fixture-worker2
 Configured Capacity: 2,147,483,648 (2 GB)
 Last contact: Wed Oct 21 10:00:01 UTC 2026
 Last Block Report: Wed Oct 21 09:59:01 UTC 2026
@@ -121,13 +121,13 @@ EOF
 )"
     datanode_rows="$(parse_live_datanodes "$datanode_fixture")"
     worker1_record="$(awk -F '\t' '$2 == "An-worker" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' <<< "$datanode_rows")"
-    worker3_record="$(awk -F '\t' '$2 == "Binh-slave" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' <<< "$datanode_rows")"
+    worker2_record="$(awk -F '\t' '$2 == "fixture-worker2" { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' <<< "$datanode_rows")"
     [[ "$worker1_record" == $'172.19.0.1:19866\tAn-worker\tWed Oct 21 10:00:00 UTC 2026\t1073741824\tWed Oct 21 09:59:00 UTC 2026' ]] || {
         echo "FAIL: endpoint, hostname, Last contact, capacity or block report crossed DataNode records." >&2
         exit 1
     }
-    [[ "$worker3_record" == $'172.19.0.1:19868\tBinh-slave\tWed Oct 21 10:00:01 UTC 2026\t2147483648\tWed Oct 21 09:59:01 UTC 2026' ]] || {
-        echo "FAIL: worker3 fixture fields were not kept in one DataNode record." >&2
+    [[ "$worker2_record" == $'172.19.0.1:19867\tfixture-worker2\tWed Oct 21 10:00:01 UTC 2026\t2147483648\tWed Oct 21 09:59:01 UTC 2026' ]] || {
+        echo "FAIL: worker2 fixture fields were not kept in one DataNode record." >&2
         exit 1
     }
     [ -z "$(datanode_state_issues "$datanode_rows")" ] || {
@@ -156,23 +156,23 @@ EOF
     yarn_fixture="$(cat <<'EOF'
 Node-Id Node-State Node-Http-Address Number-of-Running-Containers
 worker1:8041 RUNNING worker1:8042 0
-worker3:8041 RUNNING worker3:8042 1
+worker2:8041 RUNNING worker2:8042 1
 khang-worker:8041 LOST khang-worker:8042 0
-hongkhoa-worker:8041 LOST hongkhoa-worker:8042 0
+trankhoa-worker:8041 LOST trankhoa-worker:8042 0
 EOF
 )"
     yarn_aliases="$(running_yarn_aliases "$yarn_fixture")"
-    [[ "$yarn_aliases" == $'worker1\nworker3' ]] || {
+    [[ "$yarn_aliases" == $'worker1\nworker2' ]] || {
         echo "FAIL: YARN parser returned an unexpected RUNNING alias set: ${yarn_aliases}" >&2
         exit 1
     }
     yarn_alias_is_running "$yarn_aliases" worker1 || exit 1
-    yarn_alias_is_running "$yarn_aliases" worker3 || exit 1
-    if yarn_alias_is_running "$yarn_aliases" khang-worker || yarn_alias_is_running "$yarn_aliases" hongkhoa-worker; then
+    yarn_alias_is_running "$yarn_aliases" worker2 || exit 1
+    if yarn_alias_is_running "$yarn_aliases" khang-worker || yarn_alias_is_running "$yarn_aliases" trankhoa-worker; then
         echo "FAIL: YARN test confused actual hostname with logical alias." >&2
         exit 1
     fi
-    echo "PASS: local=1, pilot=worker1+worker3, full=4; DataNode fields stay grouped, fsck corruption markers are detected, and YARN checks use logical aliases."
+    echo "PASS: local=1, pilot=worker1+worker2, full=4; DataNode fields stay grouped, fsck corruption markers are detected, and YARN checks use logical aliases."
     exit 0
 fi
 

@@ -5,9 +5,6 @@
 CREATE DATABASE IF NOT EXISTS bigdata_n14_db;
 USE bigdata_n14_db;
 
--- Xóa metadata bảng mẫu cũ, không xóa file CSV nguồn
-DROP TABLE IF EXISTS sales_warehouse;
-
 -- Bảng phân tích dữ liệu Online Retail
 CREATE EXTERNAL TABLE IF NOT EXISTS online_retail (
     invoice STRING,
