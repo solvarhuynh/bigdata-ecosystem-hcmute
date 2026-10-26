@@ -120,27 +120,54 @@ docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hive/bin/beeline -
 
 ## 4. Khởi động và chạy Spark
 
-Không cần chạy `start-spark.sh` trong kiến trúc hiện tại. Lệnh chạy ứng dụng là `spark-submit`.
+Kiến trúc hiện tại chạy ứng dụng bằng `spark-submit` từ Master ở chế độ YARN client; repository không yêu cầu chạy `start-spark.sh`. Các script được mount vào `/opt/pyspark`. Mỗi lệnh dưới đây chạy đồng bộ trong cửa sổ PowerShell và trả mã thoát của `spark-submit`; chạy từng bài, đợi lệnh kết thúc rồi mới chạy bài tiếp theo.
 
-Tạo hàm PowerShell ngay trong cửa sổ đang dùng trên Master để dùng lại các tùy chọn IPv4 đã được sử dụng khi kiểm thử liên máy:
+### WordCount
 
 ```powershell
-function Run-SparkTest {
-    param([Parameter(Mandatory=$true)][string]$ScriptName)
-
-    $cmd = "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/$ScriptName"
-
-    docker exec -u hadoopnghia nghia-master bash -lc $cmd
-}
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_count.py"
 ```
 
-Chạy từng bài một và đợi bài trước kết thúc:
+Kết quả dự kiến: in đường dẫn HDFS đầu vào, tiêu đề kết quả WordCount và các từ cùng số lần xuất hiện, sắp xếp giảm dần theo số lần. Script mặc định đọc `hdfs:///nhom14/input/word/description.txt`.
+
+### Word Length Mean
 
 ```powershell
-Run-SparkTest word_count.py
-Run-SparkTest word_mean.py
-Run-SparkTest word_median.py
-Run-SparkTest word_std_dev.py
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_mean.py"
+```
+
+Kết quả dự kiến: tổng số từ, tổng số ký tự và độ dài từ trung bình (hiển thị 4 chữ số thập phân). Script mặc định đọc `hdfs:///nhom14/input/word/description.txt`.
+
+### Word Length Median
+
+```powershell
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_median.py"
+```
+
+Kết quả dự kiến: tổng số từ, độ dài ở vị trí giữa và giá trị trung vị độ dài từ. Nếu không có từ trong dữ liệu, script in thông báo tương ứng rồi kết thúc.
+
+### Word Length Standard Deviation
+
+```powershell
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_std_dev.py"
+```
+
+Kết quả dự kiến: tổng số từ, độ dài trung bình, phương sai và độ lệch chuẩn độ dài từ (các giá trị số hiển thị 4 chữ số thập phân). Nếu không có từ trong dữ liệu, script in thông báo tương ứng rồi kết thúc.
+
+```powershell
+docker exec -u hadoopnghia nghia-master yarn application -list -appStates ALL
+```
+
+Kiểm tra chi tiết một ứng dụng bằng application ID vừa tìm được:
+
+```powershell
+docker exec -u hadoopnghia nghia-master yarn application -status application_1234567890000_0001
+```
+
+Trạng thái `ACCEPTED` hoặc `RUNNING` cho biết ứng dụng chưa có kết quả cuối. Chỉ coi là hoàn tất thành công khi YARN báo trạng thái cuối `FINISHED` với final status `SUCCEEDED` và output có kết quả của bài. 
+
+```powershell
+docker exec -u hadoopnghia nghia-master yarn logs -applicationId application_1234567890000_0001
 ```
 
 ## 5. Giao diện theo dõi trên trình duyệt
@@ -149,9 +176,8 @@ Theo `.env`, máy Master có địa chỉ `MASTER_IP=100.75.213.56`. Docker Comp
 
 - **HDFS NameNode:** [http://100.75.213.56:9870](http://100.75.213.56:9870) — xem DataNode, dung lượng HDFS và block dữ liệu.
 - **YARN ResourceManager:** [http://100.75.213.56:8088/cluster](http://100.75.213.56:8088/cluster) — xem application, trạng thái YARN và các node thực thi.
-- **Spark Web UI:** [http://100.75.213.56:4040](http://100.75.213.56:4040) — mở khi bài Spark đang chạy, sau đó chọn tab Executors để xem host và task. UI thường không tồn tại sau khi ứng dụng kết thúc.
+- **Spark Web UI:** [http://100.75.213.56:4040](http://100.75.213.56:4040) — mở khi bài Spark đang chạy, sau đó chọn tab Executors để xem host và task.
 
-Nếu đã chạy container trước khi bổ sung cổng `4040`, cần build lại image và recreate Master:
 
 ```powershell
 docker build -f .\docker\Dockerfile -t bigdata-cluster:1.0 .
