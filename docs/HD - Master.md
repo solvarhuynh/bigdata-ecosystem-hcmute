@@ -117,6 +117,15 @@ docker exec nghia-master su hadoopnghia -s /bin/bash -c "/opt/hive/bin/beeline -
 
 **Ý nghĩa:** Tổng hợp doanh thu theo hóa đơn và hiển thị 20 hóa đơn có giá trị lớn nhất.
 
+### Kiểm tra các file đầu vào/đầu ra trên HDFS
+
+```powershell
+docker exec -u hadoopnghia nghia-master hdfs dfs -ls -R /nhom14/input
+```
+
+```powershell
+docker exec -u hadoopnghia nghia-master hdfs dfs -ls -R /nhom14/output
+```
 
 ## 4. Khởi động và chạy Spark
 
@@ -125,7 +134,7 @@ Kiến trúc hiện tại chạy ứng dụng bằng `spark-submit` từ Master 
 ### WordCount
 
 ```powershell
-docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_count.py"
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_count.py"
 ```
 
 Kết quả dự kiến: in đường dẫn HDFS đầu vào, tiêu đề kết quả WordCount và các từ cùng số lần xuất hiện, sắp xếp giảm dần theo số lần. Script mặc định đọc `hdfs:///nhom14/input/word/description.txt`.
@@ -133,7 +142,7 @@ Kết quả dự kiến: in đường dẫn HDFS đầu vào, tiêu đề kết 
 ### Word Length Mean
 
 ```powershell
-docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_mean.py"
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_mean.py"
 ```
 
 Kết quả dự kiến: tổng số từ, tổng số ký tự và độ dài từ trung bình (hiển thị 4 chữ số thập phân). Script mặc định đọc `hdfs:///nhom14/input/word/description.txt`.
@@ -141,7 +150,7 @@ Kết quả dự kiến: tổng số từ, tổng số ký tự và độ dài t
 ### Word Length Median
 
 ```powershell
-docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_median.py"
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_median.py"
 ```
 
 Kết quả dự kiến: tổng số từ, độ dài ở vị trí giữa và giá trị trung vị độ dài từ. Nếu không có từ trong dữ liệu, script in thông báo tương ứng rồi kết thúc.
@@ -149,25 +158,13 @@ Kết quả dự kiến: tổng số từ, độ dài ở vị trí giữa và g
 ### Word Length Standard Deviation
 
 ```powershell
-docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.ui.enabled=true --conf spark.ui.port=4040 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_std_dev.py"
+docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_std_dev.py"
 ```
 
 Kết quả dự kiến: tổng số từ, độ dài trung bình, phương sai và độ lệch chuẩn độ dài từ (các giá trị số hiển thị 4 chữ số thập phân). Nếu không có từ trong dữ liệu, script in thông báo tương ứng rồi kết thúc.
 
 ```powershell
 docker exec -u hadoopnghia nghia-master yarn application -list -appStates ALL
-```
-
-Kiểm tra chi tiết một ứng dụng bằng application ID vừa tìm được:
-
-```powershell
-docker exec -u hadoopnghia nghia-master yarn application -status application_1234567890000_0001
-```
-
-Trạng thái `ACCEPTED` hoặc `RUNNING` cho biết ứng dụng chưa có kết quả cuối. Chỉ coi là hoàn tất thành công khi YARN báo trạng thái cuối `FINISHED` với final status `SUCCEEDED` và output có kết quả của bài. 
-
-```powershell
-docker exec -u hadoopnghia nghia-master yarn logs -applicationId application_1234567890000_0001
 ```
 
 ## 5. Giao diện theo dõi trên trình duyệt
@@ -185,4 +182,192 @@ docker compose --env-file .env -f .\docker\docker-compose.master.yml up -d --for
 ```
 
 > Máy đang mở trình duyệt phải truy cập được mạng Tailscale và cho phép kết nối tới `100.75.213.56`. Nếu muốn kiểm tra nhanh trên PowerShell: `Test-NetConnection 100.75.213.56 -Port 8088` và `Test-NetConnection 100.75.213.56 -Port 9870`.
+
+## 6. Lưu kết quả Hive và Spark vào thư mục `output`
+
+### Chuẩn bị
+
+```powershell
+if (-not (Test-Path -LiteralPath .\.env)) {
+    throw 'Hay chay lenh tu thu muc goc D:\BigData-N14.'
+}
+
+$OutputDir = Join-Path (Get-Location).Path 'output'
+New-Item -ItemType Directory -Force $OutputDir | Out-Null
+$SessionLog = Join-Path $OutputDir 'session.txt'
+
+docker exec -u hadoopnghia nghia-master hdfs dfs -mkdir -p /nhom14/output
+if ($LASTEXITCODE -ne 0) {
+    throw "Khong tao duoc thu muc HDFS /nhom14/output; exit code $LASTEXITCODE"
+}
+
+$HiveSqlCount = 'SELECT COUNT(*) AS total_rows FROM online_retail;'
+$HiveSqlCountry = @'
+SET dfs.client.use.datanode.hostname=true;
+SELECT country, COUNT(DISTINCT invoice) AS total_invoices,
+       SUM(CAST(quantity AS BIGINT)) AS net_quantity,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS net_revenue
+FROM online_retail
+WHERE invoice IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY country
+ORDER BY net_revenue DESC
+LIMIT 10;
+'@
+$HiveSqlProducts = @'
+SET dfs.client.use.datanode.hostname=true;
+SELECT stockcode, MAX(description) AS product_description,
+       SUM(CAST(quantity AS BIGINT)) AS total_quantity,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS total_revenue
+FROM online_retail
+WHERE stockcode IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY stockcode
+ORDER BY total_revenue DESC
+LIMIT 20;
+'@
+$HiveSqlInvoices = @'
+SET dfs.client.use.datanode.hostname=true;
+SELECT invoice,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS invoice_total
+FROM online_retail
+WHERE invoice IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY invoice
+ORDER BY invoice_total DESC
+LIMIT 20;
+'@
+
+function Invoke-N14Task {
+    param(
+        [Parameter(Mandatory=$true)][string]$Name,
+        [Parameter(Mandatory=$true)][string]$HdfsFile,
+        [Parameter(Mandatory=$true)][string]$LocalFile,
+        [Parameter(Mandatory=$true)][scriptblock]$Command
+    )
+
+    $StageFile = Join-Path ([System.IO.Path]::GetTempPath()) $HdfsFile
+    Start-Transcript -Path $SessionLog -Append | Out-Null
+    try {
+        Write-Host "`n=== $Name ==="
+        $CapturedOutput = @()
+        & $Command 2>&1 | Tee-Object -Variable CapturedOutput
+        $ExitCode = $LASTEXITCODE
+        if ($ExitCode -ne 0) {
+            throw "$Name failed with exit code $ExitCode"
+        }
+
+        $TextLines = [string[]]@($CapturedOutput | ForEach-Object { [string]$_ })
+        [System.IO.File]::WriteAllLines(
+            $StageFile,
+            $TextLines,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+
+        docker cp $StageFile "nghia-master:/tmp/$HdfsFile"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Khong copy duoc output tam vao container; exit code $LASTEXITCODE"
+        }
+
+        docker exec -u hadoopnghia nghia-master hdfs dfs -put -f "/tmp/$HdfsFile" "/nhom14/output/$HdfsFile"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Khong ghi duoc /nhom14/output/$HdfsFile len HDFS; exit code $LASTEXITCODE"
+        }
+
+        docker exec -u hadoopnghia nghia-master hdfs dfs -get -f "/nhom14/output/$HdfsFile" "/tmp/$($HdfsFile).from_hdfs"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Khong tai duoc /nhom14/output/$HdfsFile tu HDFS; exit code $LASTEXITCODE"
+        }
+
+        docker cp "nghia-master:/tmp/$($HdfsFile).from_hdfs" $LocalFile
+        if ($LASTEXITCODE -ne 0) {
+            throw "Khong xuat duoc file HDFS ve $LocalFile; exit code $LASTEXITCODE"
+        }
+
+        Write-Host "Da luu HDFS: /nhom14/output/$HdfsFile"
+        Write-Host "Da xuat local: $LocalFile"
+    }
+    finally {
+        Stop-Transcript | Out-Null
+        if (Test-Path -LiteralPath $StageFile) {
+            Remove-Item -LiteralPath $StageFile -Force
+        }
+    }
+}
+```
+
+### Chạy riêng từng bài
+
+Chỉ gọi lệnh của bài cần lưu. Mỗi lệnh kết thúc rồi mới chạy lệnh kế tiếp nếu muốn lưu thêm bài khác.
+
+Hive — Phân tích 0, đếm số dòng:
+
+```powershell
+Invoke-N14Task -Name 'Hive 0 - COUNT(*)' -HdfsFile 'hive_00_count.txt' -LocalFile (Join-Path $OutputDir 'hive_00_count.txt') -Command {
+    docker exec -u hadoopnghia nghia-master /opt/hive/bin/beeline -u 'jdbc:hive2://nghia-master:10000/bigdata_n14_db' -e $HiveSqlCount
+}
+```
+
+Hive — Phân tích 1, doanh thu theo quốc gia:
+
+```powershell
+Invoke-N14Task -Name 'Hive 1 - Country revenue' -HdfsFile 'hive_01_country.txt' -LocalFile (Join-Path $OutputDir 'hive_01_country.txt') -Command {
+    docker exec -u hadoopnghia nghia-master /opt/hive/bin/beeline -u 'jdbc:hive2://nghia-master:10000/bigdata_n14_db' -e $HiveSqlCountry
+}
+```
+
+Hive — Phân tích 2, top 20 sản phẩm:
+
+```powershell
+Invoke-N14Task -Name 'Hive 2 - Top products' -HdfsFile 'hive_02_products.txt' -LocalFile (Join-Path $OutputDir 'hive_02_products.txt') -Command {
+    docker exec -u hadoopnghia nghia-master /opt/hive/bin/beeline -u 'jdbc:hive2://nghia-master:10000/bigdata_n14_db' -e $HiveSqlProducts
+}
+```
+
+Hive — Phân tích 3, top 20 hóa đơn:
+
+```powershell
+Invoke-N14Task -Name 'Hive 3 - Top invoices' -HdfsFile 'hive_03_invoices.txt' -LocalFile (Join-Path $OutputDir 'hive_03_invoices.txt') -Command {
+    docker exec -u hadoopnghia nghia-master /opt/hive/bin/beeline -u 'jdbc:hive2://nghia-master:10000/bigdata_n14_db' -e $HiveSqlInvoices
+}
+```
+
+WordCount:
+
+```powershell
+Invoke-N14Task -Name 'Spark WordCount' -HdfsFile 'spark_01_word_count.txt' -LocalFile (Join-Path $OutputDir 'spark_01_word_count.txt') -Command {
+    docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_count.py"
+}
+```
+
+Word Length Mean:
+
+```powershell
+Invoke-N14Task -Name 'Spark Word Length Mean' -HdfsFile 'spark_02_word_mean.txt' -LocalFile (Join-Path $OutputDir 'spark_02_word_mean.txt') -Command {
+    docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_mean.py"
+}
+```
+
+Word Length Median:
+
+```powershell
+Invoke-N14Task -Name 'Spark Word Length Median' -HdfsFile 'spark_03_word_median.txt' -LocalFile (Join-Path $OutputDir 'spark_03_word_median.txt') -Command {
+    docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_median.py"
+}
+```
+
+Word Length Standard Deviation:
+
+```powershell
+Invoke-N14Task -Name 'Spark Word Length Standard Deviation' -HdfsFile 'spark_04_word_std_dev.txt' -LocalFile (Join-Path $OutputDir 'spark_04_word_std_dev.txt') -Command {
+    docker exec -u hadoopnghia nghia-master bash -lc "spark-submit --master yarn --deploy-mode client --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/word_std_dev.py"
+}
+```
+
+Mỗi lệnh ở trên chạy đúng một bài. Output gốc của bài được giữ trên màn hình; khi lệnh thành công, cùng nội dung được ghi vào file HDFS và tải về file local tương ứng. Nếu bài lỗi, hàm giữ mã thoát và dừng trước khi xuất file như kết quả thành công. `session.txt` ghi lại các lần gọi hàm và được nối thêm, không dùng timestamp.
+
+### Liệt kê nội dung `/nhom14/output` trên HDFS
+
+```powershell
+docker exec -u hadoopnghia nghia-master hdfs dfs -ls -R /nhom14/output
+```
+
+Các file local được tải từ `/nhom14/output`; chạy lại một bài sẽ ghi đè file cùng tên ở cả hai nơi.
 
