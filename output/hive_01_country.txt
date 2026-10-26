@@ -1,0 +1,100 @@
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.17.1.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Connecting to jdbc:hive2://nghia-master:10000/bigdata_n14_db
+Connected to: Apache Hive (version 3.1.3)
+Driver: Hive JDBC (version 3.1.3)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+No rows affected (0.03 seconds)
+INFO  : Compiling command(queryId=hadoopnghia_20261026191759_514f9b6c-fe13-48f4-a25f-6384a04ff884): SELECT country, COUNT(DISTINCT invoice) AS total_invoices,
+       SUM(CAST(quantity AS BIGINT)) AS net_quantity,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS net_revenue
+FROM online_retail
+WHERE invoice IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY country
+ORDER BY net_revenue DESC
+LIMIT 10
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Semantic Analysis Completed (retrial = false)
+INFO  : Returning Hive schema: Schema(fieldSchemas:[FieldSchema(name:country, type:string, comment:null), FieldSchema(name:total_invoices, type:bigint, comment:null), FieldSchema(name:net_quantity, type:bigint, comment:null), FieldSchema(name:net_revenue, type:double, comment:null)], properties:null)
+INFO  : Completed compiling command(queryId=hadoopnghia_20261026191759_514f9b6c-fe13-48f4-a25f-6384a04ff884); Time taken: 0.181 seconds
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Executing command(queryId=hadoopnghia_20261026191759_514f9b6c-fe13-48f4-a25f-6384a04ff884): SELECT country, COUNT(DISTINCT invoice) AS total_invoices,
+       SUM(CAST(quantity AS BIGINT)) AS net_quantity,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS net_revenue
+FROM online_retail
+WHERE invoice IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY country
+ORDER BY net_revenue DESC
+LIMIT 10
+WARN  : Hive-on-MR is deprecated in Hive 2 and may not be available in the future versions. Consider using a different execution engine (i.e. spark, tez) or using Hive 1.X releases.
+INFO  : Query ID = hadoopnghia_20261026191759_514f9b6c-fe13-48f4-a25f-6384a04ff884
+INFO  : Total jobs = 2
+INFO  : Launching Job 1 out of 2
+INFO  : Starting task [Stage-1:MAPRED] in serial mode
+INFO  : Number of reduce tasks not specified. Estimated from input data size: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0033
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0033/
+INFO  : Starting Job = job_1793031539660_0033, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0033/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0033
+INFO  : Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:18:10,810 Stage-1 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:18:21,617 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 9.67 sec
+INFO  : 2026-10-26 19:18:28,817 Stage-1 map = 100%,  reduce = 100%, Cumulative CPU 12.22 sec
+INFO  : MapReduce Total cumulative CPU time: 12 seconds 220 msec
+INFO  : Ended Job = job_1793031539660_0033
+INFO  : Launching Job 2 out of 2
+INFO  : Starting task [Stage-2:MAPRED] in serial mode
+INFO  : Number of reduce tasks determined at compile time: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0034
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0034/
+INFO  : Starting Job = job_1793031539660_0034, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0034/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0034
+INFO  : Hadoop job information for Stage-2: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:18:44,574 Stage-2 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:18:49,337 Stage-2 map = 100%,  reduce = 0%, Cumulative CPU 2.45 sec
+INFO  : 2026-10-26 19:18:55,271 Stage-2 map = 100%,  reduce = 100%, Cumulative CPU 4.34 sec
+INFO  : MapReduce Total cumulative CPU time: 4 seconds 340 msec
+INFO  : Ended Job = job_1793031539660_0034
+INFO  : MapReduce Jobs Launched: 
+INFO  : Stage-Stage-1: Map: 1  Reduce: 1   Cumulative CPU: 12.22 sec   HDFS Read: 88398992 HDFS Write: 1749 SUCCESS
+INFO  : Stage-Stage-2: Map: 1  Reduce: 1   Cumulative CPU: 4.34 sec   HDFS Read: 10169 HDFS Write: 507 SUCCESS
+INFO  : Total MapReduce CPU Time Spent: 16 seconds 560 msec
+INFO  : Completed executing command(queryId=hadoopnghia_20261026191759_514f9b6c-fe13-48f4-a25f-6384a04ff884); Time taken: 58.144 seconds
+INFO  : OK
+INFO  : Concurrency mode is disabled, not creating a lock manager
++-----------------+-----------------+---------------+----------------+
+|     country     | total_invoices  | net_quantity  |  net_revenue   |
++-----------------+-----------------+---------------+----------------+
+| United Kingdom  | 48509           | 8548016       | 1.610559997E7  |
+| EIRE            | 799             | 327784        | 609217.58      |
+| Netherlands     | 247             | 373993        | 536796.93      |
+| Germany         | 1077            | 220889        | 410917.56      |
+| France          | 732             | 182461        | 323426.72      |
+| Australia       | 117             | 103706        | 167129.07      |
+| Switzerland     | 123             | 52378         | 99728.76       |
+| Spain           | 185             | 44900         | 91588.05       |
+| Sweden          | 127             | 87875         | 87809.42       |
+| Denmark         | 52              | 235045        | 65572.19       |
++-----------------+-----------------+---------------+----------------+
+10 rows selected (58.398 seconds)
+Beeline version 3.1.3 by Apache Hive
+Closing: 0: jdbc:hive2://nghia-master:10000/bigdata_n14_db

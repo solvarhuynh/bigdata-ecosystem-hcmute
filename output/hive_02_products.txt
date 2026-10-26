@@ -1,0 +1,110 @@
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.17.1.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Connecting to jdbc:hive2://nghia-master:10000/bigdata_n14_db
+Connected to: Apache Hive (version 3.1.3)
+Driver: Hive JDBC (version 3.1.3)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+No rows affected (0.034 seconds)
+INFO  : Compiling command(queryId=hadoopnghia_20261026191859_83748fc8-d208-4e5d-9c75-278174ed0342): SELECT stockcode, MAX(description) AS product_description,
+       SUM(CAST(quantity AS BIGINT)) AS total_quantity,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS total_revenue
+FROM online_retail
+WHERE stockcode IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY stockcode
+ORDER BY total_revenue DESC
+LIMIT 20
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Semantic Analysis Completed (retrial = false)
+INFO  : Returning Hive schema: Schema(fieldSchemas:[FieldSchema(name:stockcode, type:string, comment:null), FieldSchema(name:product_description, type:string, comment:null), FieldSchema(name:total_quantity, type:bigint, comment:null), FieldSchema(name:total_revenue, type:double, comment:null)], properties:null)
+INFO  : Completed compiling command(queryId=hadoopnghia_20261026191859_83748fc8-d208-4e5d-9c75-278174ed0342); Time taken: 0.833 seconds
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Executing command(queryId=hadoopnghia_20261026191859_83748fc8-d208-4e5d-9c75-278174ed0342): SELECT stockcode, MAX(description) AS product_description,
+       SUM(CAST(quantity AS BIGINT)) AS total_quantity,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS total_revenue
+FROM online_retail
+WHERE stockcode IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY stockcode
+ORDER BY total_revenue DESC
+LIMIT 20
+WARN  : Hive-on-MR is deprecated in Hive 2 and may not be available in the future versions. Consider using a different execution engine (i.e. spark, tez) or using Hive 1.X releases.
+INFO  : Query ID = hadoopnghia_20261026191859_83748fc8-d208-4e5d-9c75-278174ed0342
+INFO  : Total jobs = 2
+INFO  : Launching Job 1 out of 2
+INFO  : Starting task [Stage-1:MAPRED] in serial mode
+INFO  : Number of reduce tasks not specified. Estimated from input data size: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0035
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0035/
+INFO  : Starting Job = job_1793031539660_0035, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0035/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0035
+INFO  : Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:19:11,344 Stage-1 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:19:22,342 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 9.15 sec
+INFO  : 2026-10-26 19:19:28,265 Stage-1 map = 100%,  reduce = 100%, Cumulative CPU 11.88 sec
+INFO  : MapReduce Total cumulative CPU time: 11 seconds 880 msec
+INFO  : Ended Job = job_1793031539660_0035
+INFO  : Launching Job 2 out of 2
+INFO  : Starting task [Stage-2:MAPRED] in serial mode
+INFO  : Number of reduce tasks determined at compile time: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0036
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0036/
+INFO  : Starting Job = job_1793031539660_0036, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0036/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0036
+INFO  : Hadoop job information for Stage-2: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:19:44,172 Stage-2 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:19:48,977 Stage-2 map = 100%,  reduce = 0%, Cumulative CPU 3.1 sec
+INFO  : 2026-10-26 19:19:54,839 Stage-2 map = 100%,  reduce = 100%, Cumulative CPU 5.03 sec
+INFO  : MapReduce Total cumulative CPU time: 5 seconds 30 msec
+INFO  : Ended Job = job_1793031539660_0036
+INFO  : MapReduce Jobs Launched: 
+INFO  : Stage-Stage-1: Map: 1  Reduce: 1   Cumulative CPU: 11.88 sec   HDFS Read: 88405893 HDFS Write: 308407 SUCCESS
+INFO  : Stage-Stage-2: Map: 1  Reduce: 1   Cumulative CPU: 5.03 sec   HDFS Read: 316849 HDFS Write: 1181 SUCCESS
+INFO  : Total MapReduce CPU Time Spent: 16 seconds 910 msec
+INFO  : Completed executing command(queryId=hadoopnghia_20261026191859_83748fc8-d208-4e5d-9c75-278174ed0342); Time taken: 58.155 seconds
+INFO  : OK
+INFO  : Concurrency mode is disabled, not creating a lock manager
++------------+--------------------------------------+-----------------+----------------+
+| stockcode  |         product_description          | total_quantity  | total_revenue  |
++------------+--------------------------------------+-----------------+----------------+
+| 22423      | wonky bottom/broken                  | 25376           | 322643.15      |
+| DOT        | DOTCOM POSTAGE                       | 2925            | 304979.93      |
+| 85123A     | wrongly marked carton 22804          | 95415           | 251944.69      |
+| 85099B     | missing                              | 95290           | 180281.34      |
+| 47566      | PARTY BUNTING                        | 27209           | 147361.56      |
+| 84879      | damaged                              | 80007           | 130242.39      |
+| 22086      | PAPER CHAIN KIT 50'S CHRISTMAS       | 34416           | 116439.35      |
+| POST       | POSTAGE                              | 10013           | 110219.21      |
+| 79321      | CHILLI LIGHTS                        | 16375           | 83145.65       |
+| 22197      | SMALL POPCORN HOLDER                 | 74828           | 76239.6        |
+| 22386      | JUMBO BAG PINK WITH WHITE SPOTS      | 39251           | 75965.82       |
+| 84347      | ROTATING SILVER ANGELS T-LIGHT HLDR  | 12465           | 71853.48       |
+| 20725      | LUNCH BAG RED SPOTTY                 | 39738           | 70405.45       |
+| 85099F     | JUMBO BAG STRAWBERRY                 | 35813           | 67887.22       |
+| 48138      | DOORMAT UNION FLAG                   | 10071           | 66942.57       |
+| 20685      | RED SPOTTY COIR DOORMAT              | 9826            | 66729.37       |
+| 21137      | BLACK RECORD COVER FRAME             | 18400           | 63909.89       |
+| 21931      | JUMBO STORAGE BAG SUKI               | 28937           | 61086.36       |
+| 22502      | reverse 21/5/10 adjustment           | 3957            | 61074.25       |
+| 82484      | WOOD BLACK BOARD ANT WHITE FINISH    | 10675           | 60655.94       |
++------------+--------------------------------------+-----------------+----------------+
+20 rows selected (59.164 seconds)
+Beeline version 3.1.3 by Apache Hive
+Closing: 0: jdbc:hive2://nghia-master:10000/bigdata_n14_db

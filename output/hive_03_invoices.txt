@@ -1,0 +1,108 @@
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.17.1.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Connecting to jdbc:hive2://nghia-master:10000/bigdata_n14_db
+Connected to: Apache Hive (version 3.1.3)
+Driver: Hive JDBC (version 3.1.3)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+No rows affected (0.041 seconds)
+INFO  : Compiling command(queryId=hadoopnghia_20261026192000_f8af0cdd-4abf-4285-a037-c8cc6c39ca29): SELECT invoice,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS invoice_total
+FROM online_retail
+WHERE invoice IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY invoice
+ORDER BY invoice_total DESC
+LIMIT 20
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Semantic Analysis Completed (retrial = false)
+INFO  : Returning Hive schema: Schema(fieldSchemas:[FieldSchema(name:invoice, type:string, comment:null), FieldSchema(name:invoice_total, type:double, comment:null)], properties:null)
+INFO  : Completed compiling command(queryId=hadoopnghia_20261026192000_f8af0cdd-4abf-4285-a037-c8cc6c39ca29); Time taken: 0.234 seconds
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Executing command(queryId=hadoopnghia_20261026192000_f8af0cdd-4abf-4285-a037-c8cc6c39ca29): SELECT invoice,
+       ROUND(SUM(CAST(quantity AS DOUBLE) * CAST(price AS DOUBLE)), 2) AS invoice_total
+FROM online_retail
+WHERE invoice IS NOT NULL AND quantity IS NOT NULL AND price IS NOT NULL
+GROUP BY invoice
+ORDER BY invoice_total DESC
+LIMIT 20
+WARN  : Hive-on-MR is deprecated in Hive 2 and may not be available in the future versions. Consider using a different execution engine (i.e. spark, tez) or using Hive 1.X releases.
+INFO  : Query ID = hadoopnghia_20261026192000_f8af0cdd-4abf-4285-a037-c8cc6c39ca29
+INFO  : Total jobs = 2
+INFO  : Launching Job 1 out of 2
+INFO  : Starting task [Stage-1:MAPRED] in serial mode
+INFO  : Number of reduce tasks not specified. Estimated from input data size: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0037
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0037/
+INFO  : Starting Job = job_1793031539660_0037, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0037/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0037
+INFO  : Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:20:12,214 Stage-1 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:20:21,838 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 10.17 sec
+INFO  : 2026-10-26 19:20:29,044 Stage-1 map = 100%,  reduce = 100%, Cumulative CPU 13.94 sec
+INFO  : MapReduce Total cumulative CPU time: 13 seconds 940 msec
+INFO  : Ended Job = job_1793031539660_0037
+INFO  : Launching Job 2 out of 2
+INFO  : Starting task [Stage-2:MAPRED] in serial mode
+INFO  : Number of reduce tasks determined at compile time: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0038
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0038/
+INFO  : Starting Job = job_1793031539660_0038, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0038/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0038
+INFO  : Hadoop job information for Stage-2: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:20:44,546 Stage-2 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:20:49,442 Stage-2 map = 100%,  reduce = 0%, Cumulative CPU 3.19 sec
+INFO  : 2026-10-26 19:20:55,297 Stage-2 map = 100%,  reduce = 100%, Cumulative CPU 5.06 sec
+INFO  : MapReduce Total cumulative CPU time: 5 seconds 60 msec
+INFO  : Ended Job = job_1793031539660_0038
+INFO  : MapReduce Jobs Launched: 
+INFO  : Stage-Stage-1: Map: 1  Reduce: 1   Cumulative CPU: 13.94 sec   HDFS Read: 88403226 HDFS Write: 1703378 SUCCESS
+INFO  : Stage-Stage-2: Map: 1  Reduce: 1   Cumulative CPU: 5.06 sec   HDFS Read: 1710891 HDFS Write: 640 SUCCESS
+INFO  : Total MapReduce CPU Time Spent: 19 seconds 0 msec
+INFO  : Completed executing command(queryId=hadoopnghia_20261026192000_f8af0cdd-4abf-4285-a037-c8cc6c39ca29); Time taken: 56.772 seconds
+INFO  : OK
+INFO  : Concurrency mode is disabled, not creating a lock manager
++----------+----------------+
+| invoice  | invoice_total  |
++----------+----------------+
+| 541431   | 77183.6        |
+| 574941   | 52940.94       |
+| 576365   | 50653.91       |
+| 533027   | 49844.99       |
+| 531516   | 45332.97       |
+| 493819   | 44051.6        |
+| 556444   | 38970.0        |
+| 524181   | 33167.8        |
+| 537659   | 31770.98       |
+| 567423   | 31698.16       |
+| 537632   | 27082.66       |
+| 526934   | 26007.08       |
+| 512771   | 25111.09       |
+| 537640   | 23080.68       |
+| 515944   | 22863.36       |
+| 503061   | 22853.77       |
+| 556917   | 22775.93       |
+| 572209   | 22206.0        |
+| 567381   | 22104.8        |
+| 517731   | 21984.0        |
++----------+----------------+
+20 rows selected (118.824 seconds)
+Beeline version 3.1.3 by Apache Hive
+Closing: 0: jdbc:hive2://nghia-master:10000/bigdata_n14_db

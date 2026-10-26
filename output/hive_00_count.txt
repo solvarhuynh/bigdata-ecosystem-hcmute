@@ -1,0 +1,54 @@
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/opt/hive/lib/log4j-slf4j-impl-2.17.1.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/opt/hadoop/share/hadoop/common/lib/slf4j-reload4j-1.7.36.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.apache.logging.slf4j.Log4jLoggerFactory]
+Connecting to jdbc:hive2://nghia-master:10000/bigdata_n14_db
+Connected to: Apache Hive (version 3.1.3)
+Driver: Hive JDBC (version 3.1.3)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+INFO  : Compiling command(queryId=hadoopnghia_20261026191723_12860b79-faf7-4a21-8e10-94e20e110522): SELECT COUNT(*) AS total_rows FROM online_retail
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Semantic Analysis Completed (retrial = false)
+INFO  : Returning Hive schema: Schema(fieldSchemas:[FieldSchema(name:total_rows, type:bigint, comment:null)], properties:null)
+INFO  : Completed compiling command(queryId=hadoopnghia_20261026191723_12860b79-faf7-4a21-8e10-94e20e110522); Time taken: 0.161 seconds
+INFO  : Concurrency mode is disabled, not creating a lock manager
+INFO  : Executing command(queryId=hadoopnghia_20261026191723_12860b79-faf7-4a21-8e10-94e20e110522): SELECT COUNT(*) AS total_rows FROM online_retail
+WARN  : Hive-on-MR is deprecated in Hive 2 and may not be available in the future versions. Consider using a different execution engine (i.e. spark, tez) or using Hive 1.X releases.
+INFO  : Query ID = hadoopnghia_20261026191723_12860b79-faf7-4a21-8e10-94e20e110522
+INFO  : Total jobs = 1
+INFO  : Launching Job 1 out of 1
+INFO  : Starting task [Stage-1:MAPRED] in serial mode
+INFO  : Number of reduce tasks determined at compile time: 1
+INFO  : In order to change the average load for a reducer (in bytes):
+INFO  :   set hive.exec.reducers.bytes.per.reducer=<number>
+INFO  : In order to limit the maximum number of reducers:
+INFO  :   set hive.exec.reducers.max=<number>
+INFO  : In order to set a constant number of reducers:
+INFO  :   set mapreduce.job.reduces=<number>
+INFO  : number of splits:1
+INFO  : Submitting tokens for job: job_1793031539660_0032
+INFO  : Executing with tokens: []
+INFO  : The url to track the job: http://localhost:8088/proxy/application_1793031539660_0032/
+INFO  : Starting Job = job_1793031539660_0032, Tracking URL = http://localhost:8088/proxy/application_1793031539660_0032/
+INFO  : Kill Command = /opt/hadoop/bin/mapred job  -kill job_1793031539660_0032
+INFO  : Hadoop job information for Stage-1: number of mappers: 1; number of reducers: 1
+INFO  : 2026-10-26 19:17:37,267 Stage-1 map = 0%,  reduce = 0%
+INFO  : 2026-10-26 19:17:48,045 Stage-1 map = 100%,  reduce = 0%, Cumulative CPU 7.63 sec
+INFO  : 2026-10-26 19:17:53,922 Stage-1 map = 100%,  reduce = 100%, Cumulative CPU 9.54 sec
+INFO  : MapReduce Total cumulative CPU time: 9 seconds 540 msec
+INFO  : Ended Job = job_1793031539660_0032
+INFO  : MapReduce Jobs Launched: 
+INFO  : Stage-Stage-1: Map: 1  Reduce: 1   Cumulative CPU: 9.54 sec   HDFS Read: 88399891 HDFS Write: 107 SUCCESS
+INFO  : Total MapReduce CPU Time Spent: 9 seconds 540 msec
+INFO  : Completed executing command(queryId=hadoopnghia_20261026191723_12860b79-faf7-4a21-8e10-94e20e110522); Time taken: 33.239 seconds
+INFO  : OK
+INFO  : Concurrency mode is disabled, not creating a lock manager
++-------------+
+| total_rows  |
++-------------+
+| 1048575     |
++-------------+
+1 row selected (33.476 seconds)
+Beeline version 3.1.3 by Apache Hive
+Closing: 0: jdbc:hive2://nghia-master:10000/bigdata_n14_db
