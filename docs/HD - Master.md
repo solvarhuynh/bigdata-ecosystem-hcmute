@@ -128,7 +128,7 @@ Tạo hàm PowerShell ngay trong cửa sổ đang dùng trên Master để dùng
 function Run-SparkTest {
     param([Parameter(Mandatory=$true)][string]$ScriptName)
 
-    $cmd = "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=false /opt/pyspark/$ScriptName"
+    $cmd = "spark-submit --master yarn --deploy-mode client --conf spark.driver.host=100.75.213.56 --conf spark.driver.bindAddress=0.0.0.0 --conf spark.driver.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.executor.extraJavaOptions=-Djava.net.preferIPv4Stack=true --conf spark.hadoop.dfs.client.use.datanode.hostname=true --conf spark.python.use.daemon=true /opt/pyspark/$ScriptName"
 
     docker exec -u hadoopnghia nghia-master bash -lc $cmd
 }
@@ -145,7 +145,11 @@ Run-SparkTest word_std_dev.py
 
 ## 5. Giao diện theo dõi trên trình duyệt
 
-- **HDFS NameNode:** [http://localhost:9870](http://localhost:9870) — xem DataNode, dung lượng HDFS và block dữ liệu.
-- **YARN ResourceManager:** [http://localhost:8088](http://localhost:8088) — xem application, trạng thái YARN và các node thực thi.
-- **Spark Web UI:** [http://localhost:4040](http://localhost:4040) — mở khi bài Spark đang chạy, sau đó chọn tab Executors để xem host và task. UI thường không tồn tại sau khi ứng dụng kết thúc.
+Theo `.env`, máy Master có địa chỉ `MASTER_IP=100.75.213.56`. Docker Compose publish các cổng giao diện vào địa chỉ này, vì vậy không dùng `localhost`.
+
+- **HDFS NameNode:** [http://100.75.213.56:9870](http://100.75.213.56:9870) — xem DataNode, dung lượng HDFS và block dữ liệu.
+- **YARN ResourceManager:** [http://100.75.213.56:8088/cluster](http://100.75.213.56:8088/cluster) — xem application, trạng thái YARN và các node thực thi.
+- **Spark Web UI:** hiện chưa có link truy cập từ máy ngoài. Cấu hình `docker-compose.master.yml` chưa publish cổng `4040`; nếu cần xem UI Spark, phải publish thêm cổng này và mở link [http://100.75.213.56:4040](http://100.75.213.56:4040) khi bài Spark đang chạy. UI thường không tồn tại sau khi ứng dụng kết thúc.
+
+> Máy đang mở trình duyệt phải truy cập được mạng Tailscale và cho phép kết nối tới `100.75.213.56`. Nếu muốn kiểm tra nhanh trên PowerShell: `Test-NetConnection 100.75.213.56 -Port 8088` và `Test-NetConnection 100.75.213.56 -Port 9870`.
 
