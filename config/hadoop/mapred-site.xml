@@ -22,4 +22,8 @@
         <name>yarn.app.mapreduce.am.webapp.port-range</name>
         <value>41100-41149</value>
     </property>
+        <property>
+        <name>mapreduce.client.submit.file.replication</name>
+        <value>1</value>
+    </property>
 </configuration>

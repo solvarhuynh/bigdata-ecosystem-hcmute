@@ -54,4 +54,8 @@
         <name>hive.server2.webui.host</name>
         <value>0.0.0.0</value>
     </property>
+    <property>
+        <name>dfs.client.block.write.replace-datanode-on-failure.enable</name>
+        <value>false</value>
+    </property>
 </configuration>

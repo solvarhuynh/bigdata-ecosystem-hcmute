@@ -5,6 +5,11 @@
 ``` powershell4
 docker compose --env-file .env -f docker/docker-compose.worker.yml up -d
 ```
+### Kiểm tra tiến trình:
+
+```powershell
+docker exec khang-worker bash -lc "jps"
+```
 
 ## 2. NẾU LỖI - Xem log khi khởi động
 
@@ -16,12 +21,6 @@ docker logs --tail 100 TEN_CONTAINER
 ```
 
 ## 3. Kiểm tra HDFS và YARN
-
-### Kiểm tra tiến trình:
-
-```powershell
-docker exec khang-worker bash -lc "jps"
-```
 
 ### Kiểm tra HDFS:
 

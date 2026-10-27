@@ -11,12 +11,6 @@ docker compose --env-file .env -f .\docker\docker-compose.master.yml up -d
 Lệnh này khởi động container Master.
 `entrypoint.sh` khởi động các dịch vụ gồm HDFS NameNode, YARN ResourceManager, Hive Metastore và HiveServer2.
 
-### Bước 2 — Trên từng máy Worker
-
-```powershell
-docker compose --env-file .env -f .\docker\docker-compose.worker.yml up -d
-```
-
 ## 2. Kiểm tra HDFS và YARN
 
 ### Kiểm tra tiến trình:
