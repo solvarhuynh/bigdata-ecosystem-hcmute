@@ -15,3 +15,37 @@ docker ps
 docker logs --tail 100 TEN_CONTAINER
 ```
 
+## 3. Kiểm tra HDFS và YARN
+
+### Kiểm tra tiến trình:
+
+```powershell
+docker exec khang-worker bash -lc "jps"
+```
+
+### Kiểm tra HDFS:
+
+```powershell
+docker exec -u hadoopnghia khang-worker hdfs dfsadmin -report
+docker exec -u hadoopnghia khang-worker hdfs dfsadmin -safemode get
+```
+
+### Kiểm tra các Worker đăng ký với YARN:
+
+```powershell
+docker exec -u hadoopnghia khang-worker yarn node -list -all
+```
+
+## Chỉ khởi động thủ công nếu xác nhận daemon đang thiếu
+
+Trên chính `máy Worker` bị thiếu `DataNode`. Ví dụ máy Khang:
+
+```powershell
+docker exec -u hadoopnghia khang-worker hdfs --daemon start datanode
+```
+
+Trên chính máy Worker bị thiếu `NodeManager`:
+
+```powershell
+docker exec -u hadoopnghia khang-worker yarn --daemon start nodemanager
+```

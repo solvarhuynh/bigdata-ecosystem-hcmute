@@ -51,19 +51,6 @@ Trên Master, chỉ chạy nếu `ResourceManager` chưa hoạt động:
 ```powershell
 docker exec -u hadoopnghia nghia-master yarn --daemon start resourcemanager
 ```
---- 
-
-Trên chính `máy Worker` bị thiếu `DataNode`. Ví dụ máy Khang:
-
-```powershell
-docker exec -u hadoopnghia khang-worker hdfs --daemon start datanode
-```
-
-Trên chính máy Worker bị thiếu `NodeManager`:
-
-```powershell
-docker exec -u hadoopnghia khang-worker yarn --daemon start nodemanager
-```
 
 ## 3. Khởi động và kiểm tra Hive
 
@@ -371,3 +358,10 @@ docker exec -u hadoopnghia nghia-master hdfs dfs -ls -R /nhom14/output
 
 Các file local được tải từ `/nhom14/output`; chạy lại một bài sẽ ghi đè file cùng tên ở cả hai nơi.
 
+
+
+---
+
+```
+docker exec nghia-master bash -lc 'for h in worker1 worker2 worker3 worker4; do echo "===== $h ====="; getent hosts "$h"; for p in 8041 8042 9864 9866 9867 19868 19888; do if timeout 3 bash -c "echo > /dev/tcp/$h/$p" 2>/dev/null; then echo "$h:$p OPEN"; else echo "$h:$p FAIL"; fi; done; done'
+```

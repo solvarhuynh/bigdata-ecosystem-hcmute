@@ -88,15 +88,6 @@ assert_host_resolution() {
         fail "Tên ${alias} phân giải thành '${actual_ip:-không phân giải}', mong đợi ${expected_ip}."
 }
 
-assert_reverse_hostname() {
-    local ip="$1"
-    local expected_hostname="$2"
-    local actual_hostname
-    actual_hostname="$(getent hosts "$ip" | awk 'NR == 1 { print $2; exit }')"
-    [ "${actual_hostname,,}" = "${expected_hostname,,}" ] ||
-        fail "IP ${ip} reverse-resolve thành '${actual_hostname:-không phân giải}', mong đợi ${expected_hostname}."
-}
-
 run_as_hadoop() {
     su hadoopnghia -s /bin/bash -c "export HADOOP_CONF_DIR='${HADOOP_CONF_DIR}'; $1"
 }
@@ -479,10 +470,6 @@ for slot in $worker_slots; do
     alias="worker${slot}"
     alias_ip="${!ip_var}"
     hostname_ip="${!ip_var}"
-    if [ "$NODE_ROLE" = "worker" ] && [ "$WORKER_LOGICAL_NAME" = "$alias" ]; then
-        alias_ip="$worker_container_ip"
-        if [ "${!hostname_var,,}" = "$alias" ]; then hostname_ip="$worker_container_ip"; fi
-    fi
     add_host_entry "$alias_ip" "$alias"
     if [ "${!hostname_var,,}" != "$alias" ]; then
         add_host_entry "$hostname_ip" "${!hostname_var}"
@@ -496,16 +483,9 @@ for slot in $worker_slots; do
     alias="worker${slot}"
     alias_ip="${!ip_var}"
     hostname_ip="${!ip_var}"
-    if [ "$NODE_ROLE" = "worker" ] && [ "$WORKER_LOGICAL_NAME" = "$alias" ]; then
-        alias_ip="$worker_container_ip"
-        if [ "${!hostname_var,,}" = "$alias" ]; then hostname_ip="$worker_container_ip"; fi
-    fi
     assert_host_resolution "$alias" "$alias_ip"
     assert_host_resolution "${!hostname_var}" "$hostname_ip"
 done
-if [ "$NODE_ROLE" = "worker" ]; then
-    assert_reverse_hostname "$worker_container_ip" "$WORKER_LOGICAL_NAME"
-fi
 
 if [ "$NODE_ROLE" = "worker" ]; then
     prepare_worker_hadoop_conf
